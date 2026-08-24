@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured, googleProvider } from '@/lib/firebase';
 
-interface CricIQUser {
+export interface CricIQUser {
   uid: string;
   name: string;
   email: string;
@@ -17,15 +17,18 @@ interface CricIQUser {
   isGuest: boolean;
   favoriteTeam: string;
   favoritePlayer: string;
+  idToken?: string; // Firebase ID token — used for authenticated API calls
 }
 
 interface AuthContextType {
   user: CricIQUser | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
+  isFirebaseReady: boolean;
   signInWithGoogle: () => Promise<void>;
   signInAsGuest: () => void;
   logout: () => Promise<void>;
+  getIdToken: () => Promise<string | null>; // Fresh token for API calls
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -39,6 +42,29 @@ function restoreGuestSession(): CricIQUser | null {
   return null;
 }
 
+/**
+ * Calls /api/user/sync to create-or-update the User record in the database.
+ * Silently ignores failures — auth still works even if DB sync fails.
+ */
+async function syncUserWithDatabase(firebaseUser: FirebaseUser): Promise<void> {
+  try {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch('/api/user/sync', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      console.warn('[CricIQ] User sync failed:', res.status, await res.text());
+    }
+  } catch (err) {
+    // Don't block auth flow if sync fails (e.g. offline)
+    console.warn('[CricIQ] User sync network error:', err);
+  }
+}
+
 export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<CricIQUser | null>(restoreGuestSession);
@@ -50,10 +76,14 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
 
       if (fbUser) {
+        // Sync user record to DB on every auth state resolution
+        // (handles returning users who were already signed in)
+        syncUserWithDatabase(fbUser);
+
         const cricIQUser: CricIQUser = {
           uid: fbUser.uid,
           name: fbUser.displayName || 'User',
@@ -65,14 +95,12 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(cricIQUser);
         localStorage.setItem('criciq-auth', JSON.stringify(cricIQUser));
+        localStorage.removeItem('criciq-guest');
       } else {
         const guestData = localStorage.getItem('criciq-guest');
         if (guestData) {
-          try {
-            setUser(JSON.parse(guestData));
-          } catch {
-            setUser(null);
-          }
+          try { setUser(JSON.parse(guestData)); }
+          catch { setUser(null); }
         } else {
           setUser(null);
           localStorage.removeItem('criciq-auth');
@@ -87,55 +115,30 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     if (!auth || !isFirebaseConfigured) {
-      const mockGoogleUser: CricIQUser = {
-        uid: `google-mock-${Date.now()}`,
-        name: 'Google User',
-        email: 'user.google@gmail.com',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150',
-        isGuest: false,
-        favoriteTeam: localStorage.getItem('criciq-fav-team') || 'India',
-        favoritePlayer: localStorage.getItem('criciq-fav-player') || 'Virat Kohli',
-      };
-      setUser(mockGoogleUser);
-      localStorage.setItem('criciq-auth', JSON.stringify(mockGoogleUser));
-      localStorage.removeItem('criciq-guest');
-      return;
+      throw new Error(
+        'Firebase is not configured. Add your NEXT_PUBLIC_FIREBASE_* keys to .env and restart the dev server.'
+      );
     }
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const cricIQUser: CricIQUser = {
-        uid: result.user.uid,
-        name: result.user.displayName || 'User',
-        email: result.user.email || '',
-        image: result.user.photoURL || undefined,
-        isGuest: false,
-        favoriteTeam: localStorage.getItem('criciq-fav-team') || 'India',
-        favoritePlayer: localStorage.getItem('criciq-fav-player') || 'Virat Kohli',
-      };
-      setUser(cricIQUser);
-      localStorage.setItem('criciq-auth', JSON.stringify(cricIQUser));
-      localStorage.removeItem('criciq-guest');
-    } catch (error: unknown) {
-      const err = error as { code?: string };
-      if (err.code === 'auth/popup-closed-by-user') return;
-      if (err.code === 'auth/unauthorized-domain') {
-        console.warn('Firebase: Unauthorized domain. Add this domain to Firebase Console > Auth > Authorized domains.');
-      }
-      
-      // Fallback to mock Google user if sign-in fails
-      const mockGoogleUser: CricIQUser = {
-        uid: `google-mock-${Date.now()}`,
-        name: 'Google User',
-        email: 'user.google@gmail.com',
-        image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150',
-        isGuest: false,
-        favoriteTeam: localStorage.getItem('criciq-fav-team') || 'India',
-        favoritePlayer: localStorage.getItem('criciq-fav-player') || 'Virat Kohli',
-      };
-      setUser(mockGoogleUser);
-      localStorage.setItem('criciq-auth', JSON.stringify(mockGoogleUser));
-      localStorage.removeItem('criciq-guest');
-    }
+
+    const result = await signInWithPopup(auth, googleProvider);
+
+    // Explicitly sync after sign-in popup completes
+    // (onAuthStateChanged will also fire, but this ensures it happens before UI navigates)
+    await syncUserWithDatabase(result.user);
+
+    const cricIQUser: CricIQUser = {
+      uid: result.user.uid,
+      name: result.user.displayName || 'User',
+      email: result.user.email || '',
+      image: result.user.photoURL || undefined,
+      isGuest: false,
+      favoriteTeam: localStorage.getItem('criciq-fav-team') || 'India',
+      favoritePlayer: localStorage.getItem('criciq-fav-player') || 'Virat Kohli',
+    };
+
+    setUser(cricIQUser);
+    localStorage.setItem('criciq-auth', JSON.stringify(cricIQUser));
+    localStorage.removeItem('criciq-guest');
   }, []);
 
   const signInAsGuest = useCallback(() => {
@@ -161,13 +164,36 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       // Ignore sign-out errors
     }
     setUser(null);
+    setFirebaseUser(null);
     localStorage.removeItem('criciq-auth');
     localStorage.removeItem('criciq-guest');
     sessionStorage.removeItem('criciq-intro-shown');
   }, [firebaseUser]);
 
+  /**
+   * Returns a fresh Firebase ID token for making authenticated API requests.
+   * Firebase automatically refreshes the token if it's near expiry.
+   */
+  const getIdToken = useCallback(async (): Promise<string | null> => {
+    if (!firebaseUser) return null;
+    try {
+      return await firebaseUser.getIdToken();
+    } catch {
+      return null;
+    }
+  }, [firebaseUser]);
+
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, signInAsGuest, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      firebaseUser,
+      loading,
+      isFirebaseReady: isFirebaseConfigured,
+      signInWithGoogle,
+      signInAsGuest,
+      logout,
+      getIdToken,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -180,5 +206,3 @@ export function useFirebaseAuth() {
   }
   return context;
 }
-
-export type { CricIQUser };

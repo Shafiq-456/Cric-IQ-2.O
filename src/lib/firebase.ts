@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -10,21 +10,29 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
 };
 
-const isFirebaseConfigured = !!firebaseConfig.apiKey && !!firebaseConfig.authDomain && !!firebaseConfig.projectId;
+// Firebase is configured when the three required values are non-empty strings
+export const isFirebaseConfigured =
+  !!firebaseConfig.apiKey &&
+  !!firebaseConfig.authDomain &&
+  !!firebaseConfig.projectId;
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 
-if (typeof window !== 'undefined' && isFirebaseConfigured) {
+if (isFirebaseConfigured) {
   try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
   } catch (e) {
-    console.warn('Firebase initialization failed:', e);
+    console.error('[CricIQ] Firebase initialization error:', e);
+    app = null;
+    auth = null;
   }
 }
 
-export { auth, isFirebaseConfigured };
 export const googleProvider = new GoogleAuthProvider();
-export { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
+
+export { auth };
 export default app;

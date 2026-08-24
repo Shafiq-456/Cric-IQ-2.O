@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,14 +10,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Application User ────────────────────────────────────────────────────────
+// Keyed by Firebase UID — the stable, unchanging auth identifier.
+// Created on first sign-in via POST /api/user/sync.
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique          // Firebase Auth UID — primary identity key
+  email       String?                   // Optional; may change, not used as identity
+  name        String?
+  photoUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // User-owned relations
+  savedPlayers  SavedPlayer[]
+  activities    UserActivity[]
+  recentSearches RecentSearch[]
 }
 
+// ─── Saved Players ───────────────────────────────────────────────────────────
+// Players a user has explicitly bookmarked/tracked.
+model SavedPlayer {
+  id        String   @id @default(cuid())
+  userId    String
+  playerId  String                       // References mockData player id (e.g. 'p1')
+  playerName String
+  savedAt   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, playerId])           // One bookmark per player per user
+}
+
+// ─── User Activity ───────────────────────────────────────────────────────────
+// Tracks per-user daily AI query count and document upload count.
+model UserActivity {
+  id                String   @id @default(cuid())
+  userId            String
+  date              String                // ISO date string 'YYYY-MM-DD' for grouping
+  aiQueriesCount    Int      @default(0)
+  documentsCount    Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])               // One record per user per day
+}
+
+// ─── Recent Searches ─────────────────────────────────────────────────────────
+// Per-user search history — shown in the dashboard "Recent Searches" widget.
+model RecentSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String
+  searchedAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, searchedAt])
+}
+
+// ─── Legacy (unused, kept to avoid migration conflicts) ─────────────────────
 model Post {
   id        String   @id @default(cuid())
   title     String

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         messages: groqMessages,
         temperature: 0.7,
         max_tokens: 2048,
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       content: aiContent,
-      model: data.model || 'llama-3.3-70b-versatile',
+      model: data.model || 'openai/gpt-oss-120b',
       usage: data.usage || null,
     });
   } catch (error) {
