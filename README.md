@@ -92,22 +92,6 @@
 
 Create a `.env` file in the root directory:
 
-```env
-# Database Connection
-DATABASE_URL=file:../db/custom.db
-
-# Firebase Credentials (Public)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-# Groq AI Key (Server-side only — never exposed to client)
-GROQ_API_KEY=your_groq_api_key
-```
-
 > **Note**: For local Firebase authentication to work, ensure `localhost` is added to **Firebase Console → Authentication → Settings → Authorized domains**.
 
 ---
