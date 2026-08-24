@@ -1,0 +1,811 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef } from 'react';
+     4→import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Card, CardContent } from '@/components/ui/card';
+     7→import {
+     8→  Search, Sparkles, BarChart3, GitCompareArrows, MessageSquare,
+     9→  Brain, FileText, TrendingUp, ChevronRight,
+    10→  ArrowRight, Star, Bot, ChevronDown,
+    11→} from 'lucide-react';
+    12→import { useAppStore } from '@/store/useAppStore';
+    13→import { players, matches, testimonials, faqItems } from '@/data/mockData';
+    14→import VideoHeroSection from '@/components/landing/VideoHeroSection';
+    15→
+    16→/* ═══ 3D Animation Variants ═══ */
+    17→const fadeUp3d = {
+    18→  hidden: { opacity: 0, y: 50, rotateX: 8, translateZ: -40 },
+    19→  visible: (i: number) => ({
+    20→    opacity: 1, y: 0, rotateX: 0, translateZ: 0,
+    21→    transition: { delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] },
+    22→  }),
+    23→};
+    24→
+    25→const fadeLeft3d = {
+    26→  hidden: { opacity: 0, x: -50, rotateY: 6 },
+    27→  visible: (i: number) => ({
+    28→    opacity: 1, x: 0, rotateY: 0,
+    29→    transition: { delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] },
+    30→  }),
+    31→};
+    32→
+    33→const stagger3d = { visible: { transition: { staggerChildren: 0.1 } } };
+    34→
+    35→/* ═══ Scroll-linked 3D Section Wrapper ═══ */
+    36→function Section3D({ children, className = '', id = '' }: { children: React.ReactNode; className?: string; id?: string }) {
+    37→  const ref = useRef<HTMLElement>(null);
+    38→  const inView = useInView(ref, { once: true, margin: '-80px' });
+    39→  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+    40→  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [4, 0, -2]);
+    41→  const y = useTransform(scrollYProgress, [0, 1], [30, -20]);
+    42→
+    43→  return (
+    44→    <motion.section
+    45→      ref={ref}
+    46→      id={id}
+    47→      className={`perspective-subtle ${className}`}
+    48→      style={{ rotateX, y }}
+    49→    >
+    50→      {typeof children === 'function' ? children({ inView }) : children}
+    51→    </motion.section>
+    52→  );
+    53→}
+    54→
+    55→/* ═══ 3D Card with hover tilt ═══ */
+    56→function Card3D({ children, className = '', glowColor = 'oklch(0.65 0.20 155)' }: { children: React.ReactNode; className?: string; glowColor?: string }) {
+    57→  const ref = useRef<HTMLDivElement>(null);
+    58→
+    59→  const handleMouseMove = (e: React.MouseEvent) => {
+    60→    const el = ref.current;
+    61→    if (!el) return;
+    62→    const rect = el.getBoundingClientRect();
+    63→    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    64→    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    65→    el.style.transform = `perspective(800px) rotateY(${x * 12}deg) rotateX(${-y * 12}deg) scale(1.02)`;
+    66→    el.style.boxShadow = `${-x * 20}px ${y * 20}px 60px rgba(0,0,0,0.3), 0 0 40px ${glowColor}15`;
+    67→  };
+    68→
+    69→  const handleMouseLeave = () => {
+    70→    const el = ref.current;
+    71→    if (!el) return;
+    72→    el.style.transform = 'perspective(800px) rotateY(0) rotateX(0) scale(1)';
+    73→    el.style.boxShadow = '';
+    74→  };
+    75→
+    76→  return (
+    77→    <div
+    78→      ref={ref}
+    79→      className="card-3d"
+    80→      onMouseMove={handleMouseMove}
+    81→      onMouseLeave={handleMouseLeave}
+    82→      style={{ transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease' }}
+    83→    >
+    84→      {children}
+    85→    </div>
+    86→  );
+    87→}
+    88→
+    89→/* ═══════════════════════════════════════════════════════════════
+    90→   TRUSTED BY
+    91→   ═══════════════════════════════════════════════════════════════ */
+    92→function TrustedBySection() {
+    93→  const ref = useRef(null);
+    94→  const inView = useInView(ref, { once: true, margin: '-80px' });
+    95→  const teams = ['ICC', 'BCCI', 'Cricket Australia', 'ECB', 'NZC', 'CSA', 'PCB', 'ESPNcricinfo'];
+    96→
+    97→  return (
+    98→    <section ref={ref} className="py-16 border-y border-border/40 relative overflow-hidden">
+    99→      {/* Subtle pitch gradient */}
+   100→      <div className="absolute inset-0 pitch-strip opacity-40" />
+   101→      <motion.div
+   102→        className="max-w-6xl mx-auto px-4 relative"
+   103→        variants={stagger3d}
+   104→        initial="hidden"
+   105→        animate={inView ? 'visible' : 'hidden'}
+   106→      >
+   107→        <motion.p variants={fadeUp3d} custom={0} className="text-center text-xs uppercase tracking-[0.2em] text-muted-foreground/60 mb-10">
+   108→          Trusted by cricket organizations worldwide
+   109→        </motion.p>
+   110→        <div className="flex flex-wrap justify-center gap-x-10 gap-y-6">
+   111→          {teams.map((t, i) => (
+   112→            <motion.span
+   113→              key={t}
+   114→              variants={fadeUp3d}
+   115→              custom={i + 1}
+   116→              className="text-lg font-semibold text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors duration-500"
+   117→            >
+   118→              {t}
+   119→            </motion.span>
+   120→          ))}
+   121→        </div>
+   122→      </motion.div>
+   123→    </section>
+   124→  );
+   125→}
+   126→
+   127→/* ═══════════════════════════════════════════════════════════════
+   128→   AI SEARCH DEMO
+   129→   ═══════════════════════════════════════════════════════════════ */
+   130→function AISearchDemo() {
+   131→  const ref = useRef(null);
+   132→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   133→  const [step, setStep] = useState(0);
+   134→
+   135→  useEffect(() => {
+   136→    if (!inView) return;
+   137→    const t1 = setTimeout(() => setStep(1), 600);
+   138→    const t2 = setTimeout(() => setStep(2), 2000);
+   139→    const t3 = setTimeout(() => setStep(3), 3500);
+   140→    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+   141→  }, [inView]);
+   142→
+   143→  return (
+   144→    <Section3D className="py-28 md:py-36">
+   145→      <div className="max-w-6xl mx-auto px-4">
+   146→        <motion.div
+   147→          className="text-center mb-16"
+   148→          variants={stagger3d}
+   149→          initial="hidden"
+   150→          animate={inView ? 'visible' : 'hidden'}
+   151→        >
+   152→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.65_0.20_155)] mb-4">AI-Powered Search</motion.span>
+   153→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   154→            Ask Anything. <span className="gradient-text">Get Evidence.</span>
+   155→          </motion.h2>
+   156→          <motion.p variants={fadeUp3d} custom={2} className="text-muted-foreground/60 max-w-xl mx-auto leading-relaxed">
+   157→            Every answer is grounded in real data with citations, confidence scores, and source links.
+   158→          </motion.p>
+   159→        </motion.div>
+   160→
+   161→        <motion.div
+   162→          className="max-w-3xl mx-auto perspective-dramatic"
+   163→          initial={{ opacity: 0, y: 50, rotateX: 15, translateZ: -60 }}
+   164→          animate={inView ? { opacity: 1, y: 0, rotateX: 0, translateZ: 0 } : {}}
+   165→          transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+   166→        >
+   167→          <Card className="glass border-border/40 overflow-hidden gradient-border">
+   168→            <div className="p-4 border-b border-border/40 flex items-center gap-3">
+   169→              <Search size={16} className="text-[oklch(0.65_0.20_155)]" />
+   170→              <motion.span
+   171→                className="text-sm text-foreground/90 flex-1"
+   172→                initial={{ opacity: 0, filter: 'blur(4px)' }}
+   173→                animate={{ opacity: step >= 0 ? 1 : 0, filter: 'blur(0px)' }}
+   174→              >
+   175→                Who has the most wickets in ICC Champions Trophy history?
+   176→              </motion.span>
+   177→              {step >= 1 && (
+   178→                <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
+   179→                  <Sparkles size={14} className="text-[oklch(0.80_0.15_85)]" />
+   180→                </motion.div>
+   181→              )}
+   182→            </div>
+   183→
+   184→            {step >= 2 && (
+   185→              <motion.div
+   186→                className="p-6"
+   187→                initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
+   188→                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+   189→                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+   190→              >
+   191→                <div className="flex items-start gap-3 mb-4">
+   192→                  <div className="w-8 h-8 rounded-lg bg-[oklch(0.65_0.20_155/15%)] flex items-center justify-center shrink-0">
+   193→                    <Bot size={16} className="text-[oklch(0.65_0.20_155)]" />
+   194→                  </div>
+   195→                  <div className="flex-1">
+   196→                    <p className="text-sm leading-relaxed text-foreground/80">
+   197→                      <strong>Mitchell Starc</strong> holds the record for the most wickets in ICC Champions Trophy history with{' '}
+   198→                      <strong className="text-[oklch(0.80_0.15_85)]">27 wickets</strong> across 12 matches (2013–2025).
+   199→                      He is followed by <strong>Jasprit Bumrah</strong> with 22 wickets in 9 matches.
+   200→                    </p>
+   201→                    {step >= 3 && (
+   202→                      <motion.div
+   203→                        initial={{ opacity: 0, y: 10 }}
+   204→                        animate={{ opacity: 1, y: 0 }}
+   205→                        transition={{ delay: 0.3, duration: 0.6 }}
+   206→                        className="mt-4"
+   207→                      >
+   208→                        <div className="flex flex-wrap gap-2 mb-3">
+   209→                          {['ICC Records 2013-2025', 'ESPNcricinfo Stats'].map((s) => (
+   210→                            <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[oklch(0.65_0.20_155/8%)] text-xs text-[oklch(0.65_0.20_155)] border border-[oklch(0.65_0.20_155/15%)]">
+   211→                              <FileText size={10} /> {s}
+   212→                            </span>
+   213→                          ))}
+   214→                        </div>
+   215→                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   216→                          <span>Confidence</span>
+   217→                          <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+   218→                            <motion.div className="h-full rounded-full bg-[oklch(0.65_0.20_155)]"
+   219→                              initial={{ width: 0 }}
+   220→                              animate={{ width: '96%' }}
+   221→                              transition={{ duration: 1, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+   222→                            />
+   223→                          </div>
+   224→                          <span className="text-[oklch(0.65_0.20_155)] font-medium">96%</span>
+   225→                        </div>
+   226→                      </motion.div>
+   227→                    )}
+   228→                  </div>
+   229→                </div>
+   230→              </motion.div>
+   231→            )}
+   232→          </Card>
+   233→        </motion.div>
+   234→      </div>
+   235→    </Section3D>
+   236→  );
+   237→}
+   238→
+   239→/* ═══════════════════════════════════════════════════════════════
+   240→   FEATURE SHOWCASE — 3D tilt cards
+   241→   ═══════════════════════════════════════════════════════════════ */
+   242→function FeatureShowcase() {
+   243→  const ref = useRef(null);
+   244→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   245→  const features = [
+   246→    { icon: Brain, title: 'RAG-Powered AI', desc: 'Every answer grounded in evidence from thousands of match reports, scorecards, and historical records. Never fabricated — always cited.', color: 'oklch(0.65 0.20 155)' },
+   247→    { icon: GitCompareArrows, title: 'Player Comparison', desc: 'Multi-dimensional player comparisons across formats, conditions, and time periods with interactive visualizations.', color: 'oklch(0.80 0.15 85)' },
+   248→    { icon: BarChart3, title: 'Deep Analytics', desc: 'Advanced performance analytics with trend analysis, predictive insights, and customizable dashboards for every use case.', color: 'oklch(0.55 0.16 45)' },
+   249→    { icon: MessageSquare, title: 'Conversational AI', desc: 'Ask questions naturally — just like discussing cricket with an expert. Supports follow-up questions and contextual memory.', color: 'oklch(0.60 0.22 25)' },
+   250→    { icon: FileText, title: 'Document Intelligence', desc: 'Upload PDFs, CSVs, and reports. Our pipeline extracts, chunks, and indexes them for instant AI-powered querying.', color: 'oklch(0.65 0.12 300)' },
+   251→    { icon: TrendingUp, title: 'Live Match Intelligence', desc: 'Real-time match tracking with AI commentary, situation analysis, and historical context for every moment.', color: 'oklch(0.65 0.20 155)' },
+   252→  ];
+   253→
+   254→  return (
+   255→    <section ref={ref} className="py-28 md:py-36 relative overflow-hidden">
+   256→      {/* Stadium grid bg */}
+   257→      <div className="absolute inset-0 stadium-grid opacity-40" />
+   258→      {/* Floodlight glow */}
+   259→      <div className="absolute -top-40 left-1/3 w-[600px] h-[400px] pointer-events-none"
+   260→        style={{ background: 'radial-gradient(ellipse, oklch(0.65 0.20 155 / 5%) 0%, transparent 60%)' }}
+   261→      />
+   262→      <div className="relative max-w-6xl mx-auto px-4">
+   263→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   264→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.80_0.15_85)] mb-4">Features</motion.span>
+   265→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   266→            Everything You Need. <span className="gradient-text">Nothing You Don&apos;t.</span>
+   267→          </motion.h2>
+   268→          <motion.p variants={fadeUp3d} custom={2} className="text-muted-foreground/60 max-w-xl mx-auto leading-relaxed">
+   269→            Built for players, coaches, analysts, commentators, and fans who demand precision.
+   270→          </motion.p>
+   271→        </motion.div>
+   272→
+   273→        <motion.div
+   274→          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+   275→          variants={stagger3d}
+   276→          initial="hidden"
+   277→          animate={inView ? 'visible' : 'hidden'}
+   278→        >
+   279→          {features.map((f, i) => (
+   280→            <motion.div key={f.title} variants={fadeUp3d} custom={i}>
+   281→              <Card3D glowColor={f.color}>
+   282→                <Card className="glass border-border/40 h-full cursor-pointer group overflow-hidden relative">
+   283→                  <CardContent className="p-6 relative z-10">
+   284→                    <div
+   285→                      className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3"
+   286→                      style={{ background: `color-mix(in oklch, ${f.color} 12%, transparent)` }}
+   287→                    >
+   288→                      <f.icon size={22} style={{ color: f.color }} />
+   289→                    </div>
+   290→                    <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
+   291→                    <p className="text-sm text-muted-foreground/70 leading-relaxed">{f.desc}</p>
+   292→                  </CardContent>
+   293→                  {/* Hover glow */}
+   294→                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+   295→                    style={{ background: `radial-gradient(400px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), ${f.color}08, transparent 60%)` }}
+   296→                  />
+   297→                </Card>
+   298→              </Card3D>
+   299→            </motion.div>
+   300→          ))}
+   301→        </motion.div>
+   302→      </div>
+   303→    </section>
+   304→  );
+   305→}
+   306→
+   307→/* ═══════════════════════════════════════════════════════════════
+   308→   ANALYTICS PREVIEW
+   309→   ═══════════════════════════════════════════════════════════════ */
+   310→function AnalyticsPreview() {
+   311→  const ref = useRef(null);
+   312→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   313→  const { setView } = useAppStore();
+   314→  const bars = [
+   315→    { label: 'Batting Average', value: 85, from: 'oklch(0.65 0.20 155)', to: 'oklch(0.55 0.16 45)' },
+   316→    { label: 'Strike Rate', value: 72, from: 'oklch(0.80 0.15 85)', to: 'oklch(0.65 0.20 155)' },
+   317→    { label: 'Bowling Economy', value: 90, from: 'oklch(0.55 0.16 45)', to: 'oklch(0.80 0.15 85)' },
+   318→    { label: 'Wickets/Match', value: 65, from: 'oklch(0.60 0.22 25)', to: 'oklch(0.65 0.20 155)' },
+   319→  ];
+   320→
+   321→  return (
+   322→    <Section3D className="py-28 md:py-36">
+   323→      <div className="max-w-6xl mx-auto px-4">
+   324→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   325→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.65_0.20_155)] mb-4">Analytics</motion.span>
+   326→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   327→            Data That Tells a <span className="gradient-text">Story</span>
+   328→          </motion.h2>
+   329→          <motion.p variants={fadeUp3d} custom={2} className="text-muted-foreground/60 max-w-xl mx-auto leading-relaxed">
+   330→            Interactive charts, performance heatmaps, and trend analysis — all in real time.
+   331→          </motion.p>
+   332→        </motion.div>
+   333→
+   334→        <motion.div
+   335→          className="perspective-dramatic"
+   336→          initial={{ opacity: 0, y: 50, rotateX: 12, translateZ: -40 }}
+   337→          animate={inView ? { opacity: 1, y: 0, rotateX: 0, translateZ: 0 } : {}}
+   338→          transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+   339→        >
+   340→          <Card className="glass border-border/40 overflow-hidden gradient-border">
+   341→            <div className="p-4 border-b border-border/40 flex items-center justify-between">
+   342→              <div className="flex items-center gap-2">
+   343→                <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.65_0.20_155)]" />
+   344→                <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.80_0.15_85)]" />
+   345→                <div className="w-2.5 h-2.5 rounded-full bg-[oklch(0.55_0.16_45)]" />
+   346→              </div>
+   347→              <span className="text-[11px] text-muted-foreground/50 tracking-wide">Performance Dashboard Preview</span>
+   348→            </div>
+   349→            <div className="p-6">
+   350→              <div className="space-y-5">
+   351→                {bars.map((bar, i) => (
+   352→                  <motion.div key={bar.label} className="flex items-center gap-4"
+   353→                    initial={{ opacity: 0, x: -30, rotateY: 5 }}
+   354→                    animate={inView ? { opacity: 1, x: 0, rotateY: 0 } : {}}
+   355→                    transition={{ delay: 0.5 + i * 0.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+   356→                  >
+   357→                    <span className="text-xs text-muted-foreground/60 w-28 shrink-0">{bar.label}</span>
+   358→                    <div className="flex-1 h-9 rounded-lg bg-muted/30 overflow-hidden relative">
+   359→                      <motion.div
+   360→                        className="h-full rounded-lg relative overflow-hidden"
+   361→                        style={{ background: `linear-gradient(90deg, ${bar.from}, ${bar.to})` }}
+   362→                        initial={{ width: 0 }}
+   363→                        animate={inView ? { width: `${bar.value}%` } : { width: 0 }}
+   364→                        transition={{ delay: 0.6 + i * 0.15, duration: 1, ease: [0.16, 1, 0.3, 1] }}
+   365→                      >
+   366→                        {/* Shimmer effect */}
+   367→                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+   368→                          style={{ animation: 'grass-shimmer 2s ease-in-out infinite' }}
+   369→                        />
+   370→                      </motion.div>
+   371→                    </div>
+   372→                    <span className="text-xs font-mono text-foreground/80 w-10 text-right">{bar.value}%</span>
+   373→                  </motion.div>
+   374→                ))}
+   375→              </div>
+   376→              <div className="mt-8 text-center">
+   377→                <motion.div
+   378→                  whileHover={{ scale: 1.05, rotateY: -3 }}
+   379→                  whileTap={{ scale: 0.97 }}
+   380→                >
+   381→                  <Button variant="ghost" size="sm" className="text-[oklch(0.65_0.20_155)] hover:text-[oklch(0.65_0.20_155)]" onClick={() => setView('analytics')}>
+   382→                    Explore Full Analytics <ArrowRight size={14} className="ml-1" />
+   383→                  </Button>
+   384→                </motion.div>
+   385→              </div>
+   386→            </div>
+   387→          </Card>
+   388→        </motion.div>
+   389→      </div>
+   390→    </Section3D>
+   391→  );
+   392→}
+   393→
+   394→/* ═══════════════════════════════════════════════════════════════
+   395→   AI CHAT PREVIEW
+   396→   ═══════════════════════════════════════════════════════════════ */
+   397→function AIChatPreview() {
+   398→  const ref = useRef(null);
+   399→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   400→  const { setView } = useAppStore();
+   401→
+   402→  const previewMessages = [
+   403→    { role: 'user' as const, text: 'Explain why India lost the 2023 WTC final' },
+   404→    { role: 'assistant' as const, text: 'Based on match analysis from the ICC WTC Final 2023 at The Oval: India lost by 209 runs primarily due to Australia\'s dominant first-innings total of 469, built on Steve Smith\'s 121 and Travis Head\'s 163. India\'s batting collapsed in both innings against Pat Cummins (6/79) and Scott Boland (3/46), with no Indian batter crossing 50 in the second innings.' },
+   405→  ];
+   406→
+   407→  return (
+   408→    <Section3D className="py-28 md:py-36 relative overflow-hidden">
+   409→      <div className="absolute -bottom-40 right-1/4 w-[500px] h-[400px] pointer-events-none"
+   410→        style={{ background: 'radial-gradient(ellipse, oklch(0.65 0.12 300 / 4%) 0%, transparent 60%)' }}
+   411→      />
+   412→      <div className="relative max-w-6xl mx-auto px-4">
+   413→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   414→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.55_0.16_45)] mb-4">AI Chat</motion.span>
+   415→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   416→            Your Cricket <span className="gradient-text">Expert</span>
+   417→          </motion.h2>
+   418→        </motion.div>
+   419→
+   420→        <motion.div
+   421→          className="max-w-2xl mx-auto perspective-dramatic"
+   422→          initial={{ opacity: 0, y: 50, rotateX: 12, translateZ: -40 }}
+   423→          animate={inView ? { opacity: 1, y: 0, rotateX: 0, translateZ: 0 } : {}}
+   424→          transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+   425→        >
+   426→          <Card className="glass border-border/40 overflow-hidden gradient-border">
+   427→            <div className="p-4 border-b border-border/40 flex items-center gap-2">
+   428→              <div className="w-2 h-2 rounded-full bg-[oklch(0.65_0.20_155)] animate-pulse" />
+   429→              <span className="text-[11px] text-muted-foreground/50 tracking-wide">AI Chat — Online</span>
+   430→            </div>
+   431→            <div className="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar">
+   432→              {previewMessages.map((msg, i) => (
+   433→                <motion.div
+   434→                  key={i}
+   435→                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+   436→                  initial={{ opacity: 0, y: 20, scale: 0.95, filter: 'blur(4px)' }}
+   437→                  animate={inView ? { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' } : {}}
+   438→                  transition={{ delay: 0.5 + i * 0.4, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+   439→                >
+   440→                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+   441→                    msg.role === 'user'
+   442→                      ? 'bg-[oklch(0.65_0.20_155/12%)] text-foreground/90 rounded-br-md border border-[oklch(0.65_0.20_155/10%)]'
+   443→                      : 'bg-muted/50 text-foreground/80 rounded-bl-md'
+   444→                  }`}>
+   445→                    {msg.text}
+   446→                  </div>
+   447→                </motion.div>
+   448→              ))}
+   449→            </div>
+   450→            <div className="p-4 border-t border-border/40 text-center">
+   451→              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
+   452→                <Button variant="ghost" size="sm" className="text-[oklch(0.65_0.20_155)]" onClick={() => setView('chat')}>
+   453→                  Try AI Chat <ArrowRight size={14} className="ml-1" />
+   454→                </Button>
+   455→              </motion.div>
+   456→            </div>
+   457→          </Card>
+   458→        </motion.div>
+   459→      </div>
+   460→    </Section3D>
+   461→  );
+   462→}
+   463→
+   464→/* ═══════════════════════════════════════════════════════════════
+   465→   PLAYER INTELLIGENCE — 3D tilt cards
+   466→   ═══════════════════════════════════════════════════════════════ */
+   467→function PlayerIntelligence() {
+   468→  const ref = useRef(null);
+   469→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   470→  const { setView } = useAppStore();
+   471→  const featured = players.slice(0, 4);
+   472→
+   473→  return (
+   474→    <Section3D className="py-28 md:py-36">
+   475→      <div className="max-w-6xl mx-auto px-4">
+   476→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   477→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.80_0.15_85)] mb-4">Player Intelligence</motion.span>
+   478→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   479→            Every Player. <span className="gradient-text">Every Stat.</span>
+   480→          </motion.h2>
+   481→        </motion.div>
+   482→
+   483→        <motion.div
+   484→          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+   485→          variants={stagger3d}
+   486→          initial="hidden"
+   487→          animate={inView ? 'visible' : 'hidden'}
+   488→        >
+   489→          {featured.map((p, i) => (
+   490→            <motion.div key={p.id} variants={fadeUp3d} custom={i}>
+   491→              <Card3D glowColor="oklch(0.65 0.20 155)">
+   492→                <Card className="glass border-border/40 hover:border-[oklch(0.65_0.20_155/20%)] transition-all duration-500 group cursor-pointer overflow-hidden">
+   493→                  <CardContent className="p-5 relative z-10">
+   494→                    <div className="flex items-center gap-3 mb-4">
+   495→                      <motion.div
+   496→                        className="w-11 h-11 rounded-full bg-gradient-to-br from-[oklch(0.65_0.20_155/25%)] to-[oklch(0.80_0.15_85/25%)] flex items-center justify-center text-lg font-bold"
+   497→                        whileHover={{ scale: 1.15, rotate: 5 }}
+   498→                      >
+   499→                        {p.name.split(' ').map(n => n[0]).join('')}
+   500→                      </motion.div>
+   501→                      <div>
+   502→                        <h4 className="font-semibold text-sm">{p.name}</h4>
+   503→                        <p className="text-[11px] text-muted-foreground/60">{p.flag} {p.country} · {p.role}</p>
+   504→                      </div>
+   505→                    </div>
+   506→                    <div className="grid grid-cols-3 gap-2 text-center">
+   507→                      {[
+   508→                        { val: p.role === 'Bowler' || p.role === 'All-rounder' ? p.wickets : p.runs.toLocaleString(), label: p.role === 'Bowler' ? 'Wickets' : 'Runs', color: 'oklch(0.65 0.20 155)' },
+   509→                        { val: p.average, label: 'Average', color: 'oklch(0.80 0.15 85)' },
+   510→                        { val: `#${p.iccRanking}`, label: 'ICC Rank', color: 'oklch(0.55 0.16 45)' },
+   511→                      ].map((stat) => (
+   512→                        <div key={stat.label} className="py-2.5 rounded-lg bg-muted/30 border border-border/20">
+   513→                          <p className="text-sm font-bold" style={{ color: stat.color }}>{stat.val}</p>
+   514→                          <p className="text-[10px] text-muted-foreground/50">{stat.label}</p>
+   515→                        </div>
+   516→                      ))}
+   517→                    </div>
+   518→                  </CardContent>
+   519→                </Card>
+   520→              </Card3D>
+   521→            </motion.div>
+   522→          ))}
+   523→        </motion.div>
+   524→
+   525→        <motion.div className="text-center mt-10" initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.8, duration: 0.7 }}>
+   526→          <motion.div whileHover={{ scale: 1.05, rotateY: -3 }} whileTap={{ scale: 0.97 }}>
+   527→            <Button variant="outline" size="sm" className="border-border/30 hover:border-[oklch(0.65_0.20_155/30%)]" onClick={() => setView('players')}>
+   528→              Explore All Players <ChevronRight size={14} className="ml-1" />
+   529→            </Button>
+   530→          </motion.div>
+   531→        </motion.div>
+   532→      </div>
+   533→    </Section3D>
+   534→  );
+   535→}
+   536→
+   537→/* ═══════════════════════════════════════════════════════════════
+   538→   MATCH INTELLIGENCE
+   539→   ═══════════════════════════════════════════════════════════════ */
+   540→function MatchIntelligence() {
+   541→  const ref = useRef(null);
+   542→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   543→  const { setView } = useAppStore();
+   544→  const featured = matches.filter(m => m.status !== 'upcoming').slice(0, 3);
+   545→
+   546→  return (
+   547→    <Section3D className="py-28 md:py-36 relative overflow-hidden">
+   548→      <div className="absolute -top-40 left-1/4 w-[500px] h-[300px] pointer-events-none"
+   549→        style={{ background: 'radial-gradient(ellipse, oklch(0.55 0.16 45 / 4%) 0%, transparent 60%)' }}
+   550→      />
+   551→      <div className="relative max-w-6xl mx-auto px-4">
+   552→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   553→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.65_0.20_155)] mb-4">Match Intelligence</motion.span>
+   554→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold mb-4 font-display">
+   555→            Matches Decoded. <span className="gradient-text">Insights Delivered.</span>
+   556→          </motion.h2>
+   557→        </motion.div>
+   558→
+   559→        <motion.div className="space-y-4" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   560→          {featured.map((m, i) => (
+   561→            <motion.div key={m.id} variants={fadeUp3d} custom={i}>
+   562→              <Card3D glowColor="oklch(0.65 0.20 155)">
+   563→                <Card className="glass border-border/40 hover:border-[oklch(0.65_0.20_155/20%)] transition-all duration-500 overflow-hidden">
+   564→                  <CardContent className="p-4 md:p-6 relative z-10">
+   565→                    <div className="flex items-center justify-between mb-3">
+   566→                      <span className="text-xs text-muted-foreground/50">{m.competition}</span>
+   567→                      <span className={`text-xs px-2.5 py-0.5 rounded-full ${
+   568→                        m.status === 'live' ? 'bg-[oklch(0.65_0.20_155/12%)] text-[oklch(0.65_0.20_155)] border border-[oklch(0.65_0.20_155/20%)]' : 'bg-muted/30 text-muted-foreground'
+   569→                      }`}>
+   570→                        {m.status === 'live' ? '● LIVE' : 'Completed'}
+   571→                      </span>
+   572→                    </div>
+   573→                    <div className="flex items-center justify-between">
+   574→                      <div className="flex items-center gap-3">
+   575→                        <span className="text-2xl">{m.flagA}</span>
+   576→                        <div>
+   577→                          <p className="font-semibold">{m.teamA}</p>
+   578→                          {m.scoreA && <p className="text-sm text-[oklch(0.65_0.20_155)] font-mono">{m.scoreA}</p>}
+   579→                        </div>
+   580→                      </div>
+   581→                      <div className="text-center px-4">
+   582→                        <p className="text-[11px] text-muted-foreground/50 mb-1">{m.date}</p>
+   583→                        {m.result ? (
+   584→                          <p className="text-xs text-[oklch(0.80_0.15_85)] font-medium">{m.result}</p>
+   585→                        ) : (
+   586→                          <p className="text-xs text-muted-foreground/40">vs</p>
+   587→                        )}
+   588→                      </div>
+   589→                      <div className="flex items-center gap-3">
+   590→                        <div className="text-right">
+   591→                          <p className="font-semibold">{m.teamB}</p>
+   592→                          {m.scoreB && <p className="text-sm text-[oklch(0.65_0.20_155)] font-mono">{m.scoreB}</p>}
+   593→                        </div>
+   594→                        <span className="text-2xl">{m.flagB}</span>
+   595→                      </div>
+   596→                    </div>
+   597→                    {m.highlights && m.highlights.length > 0 && (
+   598→                      <div className="flex flex-wrap gap-1.5 mt-3">
+   599→                        {m.highlights.map((h) => (
+   600→                          <span key={h} className="text-[10px] px-2 py-0.5 rounded-full bg-muted/30 text-muted-foreground/60">{h}</span>
+   601→                        ))}
+   602→                      </div>
+   603→                    )}
+   604→                  </CardContent>
+   605→                </Card>
+   606→              </Card3D>
+   607→            </motion.div>
+   608→          ))}
+   609→        </motion.div>
+   610→
+   611→        <motion.div className="text-center mt-10" initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.8, duration: 0.7 }}>
+   612→          <motion.div whileHover={{ scale: 1.05, rotateY: -3 }} whileTap={{ scale: 0.97 }}>
+   613→            <Button variant="outline" size="sm" className="border-border/30 hover:border-[oklch(0.65_0.20_155/30%)]" onClick={() => setView('matches')}>
+   614→              All Matches <ChevronRight size={14} className="ml-1" />
+   615→            </Button>
+   616→          </motion.div>
+   617→        </motion.div>
+   618→      </div>
+   619→    </Section3D>
+   620→  );
+   621→}
+   622→
+   623→/* ═══════════════════════════════════════════════════════════════
+   624→   TESTIMONIALS
+   625→   ═══════════════════════════════════════════════════════════════ */
+   626→function TestimonialsSection() {
+   627→  const ref = useRef(null);
+   628→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   629→
+   630→  return (
+   631→    <Section3D className="py-28 md:py-36">
+   632→      <div className="max-w-6xl mx-auto px-4">
+   633→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   634→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.65_0.20_155)] mb-4">Testimonials</motion.span>
+   635→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold font-display">
+   636→            Loved by Cricket <span className="gradient-text">Experts</span>
+   637→          </motion.h2>
+   638→        </motion.div>
+   639→
+   640→        <motion.div
+   641→          className="grid grid-cols-1 md:grid-cols-3 gap-6"
+   642→          variants={stagger3d}
+   643→          initial="hidden"
+   644→          animate={inView ? 'visible' : 'hidden'}
+   645→        >
+   646→          {testimonials.map((t, i) => (
+   647→            <motion.div key={t.name} variants={fadeUp3d} custom={i}>
+   648→              <Card3D glowColor="oklch(0.80 0.15 85)">
+   649→                <Card className="glass border-border/40 h-full">
+   650→                  <CardContent className="p-6 relative z-10">
+   651→                    <div className="flex items-center gap-1 mb-4">
+   652→                      {Array.from({ length: 5 }).map((_, s) => (
+   653→                        <Star key={s} size={14} className="text-[oklch(0.80_0.15_85)] fill-[oklch(0.80_0.15_85)]" />
+   654→                      ))}
+   655→                    </div>
+   656→                    <p className="text-sm text-foreground/75 leading-relaxed mb-6">&ldquo;{t.quote}&rdquo;</p>
+   657→                    <div className="flex items-center gap-3">
+   658→                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[oklch(0.65_0.20_155/25%)] to-[oklch(0.80_0.15_85/25%)] flex items-center justify-center text-xs font-bold">
+   659→                        {t.avatar}
+   660→                      </div>
+   661→                      <div>
+   662→                        <p className="text-sm font-semibold">{t.name}</p>
+   663→                        <p className="text-[11px] text-muted-foreground/50">{t.role}</p>
+   664→                      </div>
+   665→                    </div>
+   666→                  </CardContent>
+   667→                </Card>
+   668→              </Card3D>
+   669→            </motion.div>
+   670→          ))}
+   671→        </motion.div>
+   672→      </div>
+   673→    </Section3D>
+   674→  );
+   675→}
+   676→
+   677→/* ═══════════════════════════════════════════════════════════════
+   678→   FAQ
+   679→   ═══════════════════════════════════════════════════════════════ */
+   680→function FAQSection() {
+   681→  const ref = useRef(null);
+   682→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   683→  const [openIdx, setOpenIdx] = useState<number | null>(null);
+   684→
+   685→  return (
+   686→    <Section3D className="py-28 md:py-36">
+   687→      <div className="max-w-3xl mx-auto px-4">
+   688→        <motion.div className="text-center mb-16" variants={stagger3d} initial="hidden" animate={inView ? 'visible' : 'hidden'}>
+   689→          <motion.span variants={fadeUp3d} custom={0} className="inline-block text-xs uppercase tracking-[0.2em] text-[oklch(0.55_0.16_45)] mb-4">FAQ</motion.span>
+   690→          <motion.h2 variants={fadeUp3d} custom={1} className="text-3xl md:text-5xl font-bold font-display">
+   691→            Got Questions? <span className="gradient-text">We&apos;ve Got Answers.</span>
+   692→          </motion.h2>
+   693→        </motion.div>
+   694→
+   695→        <motion.div
+   696→          className="space-y-3"
+   697→          variants={stagger3d}
+   698→          initial="hidden"
+   699→          animate={inView ? 'visible' : 'hidden'}
+   700→        >
+   701→          {faqItems.map((faq, i) => (
+   702→            <motion.div key={i} variants={fadeUp3d} custom={i}>
+   703→              <Card className="glass border-border/40 overflow-hidden">
+   704→                <button
+   705→                  className="w-full p-5 flex items-center justify-between text-left cursor-pointer group"
+   706→                  onClick={() => setOpenIdx(openIdx === i ? null : i)}
+   707→                >
+   708→                  <span className="text-sm font-medium pr-4 group-hover:text-[oklch(0.65_0.20_155)] transition-colors duration-300">{faq.q}</span>
+   709→                  <motion.div animate={{ rotate: openIdx === i ? 180 : 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
+   710→                    <ChevronDown size={16} className="text-muted-foreground/50 shrink-0" />
+   711→                  </motion.div>
+   712→                </button>
+   713→                <AnimatePresence>
+   714→                  {openIdx === i && (
+   715→                    <motion.div
+   716→                      initial={{ height: 0, opacity: 0 }}
+   717→                      animate={{ height: 'auto', opacity: 1 }}
+   718→                      exit={{ height: 0, opacity: 0 }}
+   719→                      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+   720→                    >
+   721→                      <div className="px-5 pb-5 text-sm text-muted-foreground/60 leading-relaxed">
+   722→                        {faq.a}
+   723→                      </div>
+   724→                    </motion.div>
+   725→                  )}
+   726→                </AnimatePresence>
+   727→              </Card>
+   728→            </motion.div>
+   729→          ))}
+   730→        </motion.div>
+   731→      </div>
+   732→    </Section3D>
+   733→  );
+   734→}
+   735→
+   736→/* ═══════════════════════════════════════════════════════════════
+   737→   FOOTER
+   738→   ═══════════════════════════════════════════════════════════════ */
+   739→function FooterSection() {
+   740→  const { setView } = useAppStore();
+   741→  return (
+   742→    <footer className="border-t border-border/30 py-16 relative overflow-hidden">
+   743→      {/* Subtle pitch strip at bottom */}
+   744→      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[oklch(0.65_0.20_155/20%)] to-transparent" />
+   745→      <div className="max-w-6xl mx-auto px-4">
+   746→        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+   747→          <div className="col-span-2 md:col-span-1">
+   748→            <div className="flex items-center gap-2 mb-4">
+   749→              <div className="w-7 h-7 rounded-full overflow-hidden"
+   750→                style={{ boxShadow: '0 0 10px rgba(212,69,53,0.25)' }}
+   751→              >
+   752→                <img src="/cricket-ball.png" alt="" className="w-full h-full object-contain" />
+   753→              </div>
+   754→              <span className="text-lg font-bold font-display"><span className="gradient-text">Cric</span>IQ</span>
+   755→            </div>
+   756→            <p className="text-xs text-muted-foreground/50 leading-relaxed">
+   757→              The Future of Cricket Intelligence. AI-powered analysis for everyone who loves the game.
+   758→            </p>
+   759→          </div>
+   760→          {[
+   761→            { title: 'Product', links: ['AI Chat', 'Analytics', 'Players', 'Matches', 'Compare'] },
+   762→            { title: 'Company', links: ['About', 'Blog', 'Careers', 'Contact'] },
+   763→            { title: 'Legal', links: ['Privacy', 'Terms', 'Security'] },
+   764→          ].map((col) => (
+   765→            <div key={col.title}>
+   766→              <h4 className="text-sm font-semibold mb-4">{col.title}</h4>
+   767→              <ul className="space-y-2">
+   768→                {col.links.map((l) => (
+   769→                  <li key={l}>
+   770→                    <button className="text-xs text-muted-foreground/50 hover:text-foreground/80 transition-colors duration-300 cursor-pointer">
+   771→                      {l}
+   772→                    </button>
+   773→                  </li>
+   774→                ))}
+   775→              </ul>
+   776→            </div>
+   777→          ))}
+   778→        </div>
+   779→        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-border/30">
+   780→          <p className="text-xs text-muted-foreground/40">&copy; 2026 CricIQ. All rights reserved.</p>
+   781→          <motion.div whileHover={{ scale: 1.04, rotateY: -2 }} whileTap={{ scale: 0.97 }}>
+   782→            <Button size="sm" className="bg-[oklch(0.65_0.20_155)] hover:bg-[oklch(0.58_0.22_155)] text-white" style={{ boxShadow: '0 0 20px oklch(0.65 0.20 155 / 15%)' }} onClick={() => setView('dashboard')}>
+   783→              Get Started Free <ArrowRight size={14} className="ml-1" />
+   784→            </Button>
+   785→          </motion.div>
+   786→        </div>
+   787→      </div>
+   788→    </footer>
+   789→  );
+   790→}
+   791→
+   792→/* ═══════════════════════════════════════════════════════════════
+   793→   MAIN LANDING PAGE
+   794→   ═══════════════════════════════════════════════════════════════ */
+   795→export default function LandingPage({ onEnterApp }: { onEnterApp?: () => void }) {
+   796→  return (
+   797→    <div className="min-h-screen bg-background">
+   798→      <VideoHeroSection onEnterApp={onEnterApp} />
+   799→      <TrustedBySection />
+   800→      <AISearchDemo />
+   801→      <FeatureShowcase />
+   802→      <AnalyticsPreview />
+   803→      <AIChatPreview />
+   804→      <PlayerIntelligence />
+   805→      <MatchIntelligence />
+   806→      <TestimonialsSection />
+   807→      <FAQSection />
+   808→      <FooterSection />
+   809→    </div>
+   810→  );
+   811→}

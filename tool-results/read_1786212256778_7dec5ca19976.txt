@@ -1,0 +1,1008 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { Card, CardContent } from '@/components/ui/card';
+     6→import { Button } from '@/components/ui/button';
+     7→import { Badge } from '@/components/ui/badge';
+     8→import { Input } from '@/components/ui/input';
+     9→import {
+    10→  Send, Sparkles, FileText, Bot, User, Copy, Check,
+    11→  ThumbsUp, ThumbsDown, Share2, Bookmark,
+    12→  Mic, Paperclip, Lightbulb,
+    13→} from 'lucide-react';
+    14→import { toast } from 'sonner';
+    15→import { sampleChatMessages, players, matches, battingTimeline, bowlingTimeline, type ChatMessage, type Player, type Match } from '@/data/mockData';
+    16→
+    17→const suggestedPrompts = [
+    18→  'Compare Kohli vs Smith in away Tests',
+    19→  'Best bowling figures in WTC 2025',
+    20→  'Explain DRS success rate by team',
+    21→  'India vs Australia head-to-head since 2020',
+    22→  'Top 5 fast bowlers under 25',
+    23→];
+    24→
+    25→/* ────────────────────── Smart Response Generator ────────────────────── */
+    26→
+    27→function generateSmartResponse(query: string): ChatMessage {
+    28→  const q = query.toLowerCase();
+    29→
+    30→  // 1. COMPARISON queries: "compare X vs Y", "X vs Y"
+    31→  const compareMatch = q.match(/compare\s+(.+?)\s+vs\.?\s+(.+)/) || q.match(/(.+?)\s+vs\.?\s+(.+)/);
+    32→  if (compareMatch) {
+    33→    const nameA = compareMatch[1].replace(/\bin\s+away\s+tests\b/i, '').replace(/['']/g, '').trim();
+    34→    const nameB = compareMatch[2].replace(/\bin\s+away\s+tests\b/i, '').replace(/['']/g, '').trim();
+    35→    const playerA = findPlayer(nameA);
+    36→    const playerB = findPlayer(nameB);
+    37→
+    38→    if (playerA && playerB) {
+    39→      return buildComparisonResponse(playerA, playerB, query);
+    40→    }
+    41→    if (playerA && !playerB) {
+    42→      return buildSinglePlayerResponse(playerA, query);
+    43→    }
+    44→    if (!playerA && playerB) {
+    45→      return buildSinglePlayerResponse(playerB, query);
+    46→    }
+    47→  }
+    48→
+    49→  // 2. BOWLING stats queries
+    50→  if (q.includes('bowling') || q.includes('wicket') || q.includes('economy') || q.includes('best bowling figures')) {
+    51→    return buildBowlingResponse(q, query);
+    52→  }
+    53→
+    54→  // 3. BATTING stats queries
+    55→  if (q.includes('batting') || q.includes('runs') || q.includes('average') || q.includes('strike rate') || q.includes('century') || q.includes('scores')) {
+    56→    return buildBattingResponse(q, query);
+    57→  }
+    58→
+    59→  // 4. Single player lookup
+    60→  const foundPlayer = players.find(p => q.includes(p.name.toLowerCase()));
+    61→  if (foundPlayer) {
+    62→    return buildSinglePlayerResponse(foundPlayer, query);
+    63→  }
+    64→
+    65→  // 5. MATCH / TEAM lookup
+    66→  const foundMatch = matches.find(m =>
+    67→    q.includes(m.teamA.toLowerCase()) && q.includes(m.teamB.toLowerCase())
+    68→  );
+    69→  if (foundMatch) {
+    70→    return buildMatchResponse(foundMatch, query);
+    71→  }
+    72→
+    73→  // Check by single team
+    74→  const foundTeamMatches = matches.filter(m =>
+    75→    q.includes(m.teamA.toLowerCase()) || q.includes(m.teamB.toLowerCase())
+    76→  );
+    77→  if (foundTeamMatches.length > 0) {
+    78→    const teamName = foundTeamMatches[0].teamA.toLowerCase().includes(q) || q.includes(foundTeamMatches[0].teamA.toLowerCase())
+    79→      ? foundTeamMatches[0].teamA
+    80→      : foundTeamMatches[0].teamB;
+    81→    return buildTeamMatchesResponse(teamName, foundTeamMatches, query);
+    82→  }
+    83→
+    84→  // 6. TOP / BEST / RANKING queries
+    85→  if (q.includes('top') || q.includes('best') || q.includes('ranking') || q.includes('icc')) {
+    86→    return buildRankingResponse(q, query);
+    87→  }
+    88→
+    89→  // 7. UPCOMING / LIVE / SCHEDULE queries
+    90→  if (q.includes('upcoming') || q.includes('schedule') || q.includes('next match') || q.includes('live')) {
+    91→    return buildScheduleResponse(q, query);
+    92→  }
+    93→
+    94→  // 8. Under-25 / young bowlers etc.
+    95→  if (q.includes('under 25') || q.includes('young') || q.includes('fast bowler')) {
+    96→    return buildYoungPlayersResponse(q, query);
+    97→  }
+    98→
+    99→  // 9. DRS / head-to-head / specific topic without direct match
+   100→  if (q.includes('drs') || q.includes('head-to-head') || q.includes('head to head')) {
+   101→    return buildTopicResponse(q, query);
+   102→  }
+   103→
+   104→  // 10. Fallback: unrecognized
+   105→  return buildFallbackResponse(query);
+   106→}
+   107→
+   108→function findPlayer(name: string): Player | undefined {
+   109→  const clean = name.replace(/['']/g, '').trim().toLowerCase();
+   110→  return players.find(p => {
+   111→    const pName = p.name.toLowerCase();
+   112→    if (pName === clean) return true;
+   113→    // Check if all significant words in `clean` appear in the player name
+   114→    const words = clean.split(/\s+/).filter(w => w.length > 2);
+   115→    return words.every(w => pName.includes(w));
+   116→  });
+   117→}
+   118→
+   119→function buildComparisonResponse(a: Player, b: Player, query: string): ChatMessage {
+   120→  const runsDiff = a.runs - b.runs;
+   121→  const avgDiff = (a.average - b.average).toFixed(2);
+   122→  const betterRuns = runsDiff > 0 ? a.name : b.name;
+   123→  const betterAvg = a.average > b.average ? a.name : b.name;
+   124→  const isBatting = a.role === 'Batsman' || b.role === 'Batsman' || a.role === 'All-rounder' || b.role === 'All-rounder';
+   125→  const isBowling = a.role === 'Bowler' || b.role === 'Bowler' || a.role === 'All-rounder' || b.role === 'All-rounder';
+   126→
+   127→  let content = `Here's a detailed comparison between **${a.name}** (${a.flag} ${a.country}) and **${b.name}** (${b.flag} ${b.country}):\n\n`;
+   128→
+   129→  if (isBatting) {
+   130→    content += `**Batting Comparison:**\n`;
+   131→    content += `• **${a.name}**: ${a.runs.toLocaleString()} runs in ${a.matches} matches at an average of **${a.average}** (SR: ${a.strikeRate})\n`;
+   132→    content += `• **${b.name}**: ${b.runs.toLocaleString()} runs in ${b.matches} matches at an average of **${b.average}** (SR: ${b.strikeRate})\n\n`;
+   133→    content += `${betterRuns} has scored more total runs, while ${betterAvg} holds the higher batting average. `;
+   134→  }
+   135→
+   136→  if (isBowling) {
+   137→    content += `**Bowling Comparison:**\n`;
+   138→    content += `• **${a.name}**: ${a.wickets} wickets in ${a.matches} matches at an average of **${a.average}**, economy ${a.economy}\n`;
+   139→    content += `• **${b.name}**: ${b.wickets} wickets in ${b.matches} matches at an average of **${b.average}**, economy ${b.economy}\n\n`;
+   140→  }
+   141→
+   142→  content += `**Form & Rating:** ${a.name} is in **${a.form}** form (rating: ${a.rating}/10), while ${b.name} is in **${b.form}** form (rating: ${b.rating}/10).\n\n`;
+   143→  content += `**ICC Ranking:** ${a.name} is ranked **#${a.iccRanking}** and ${b.name} is ranked **#${b.iccRanking}** in the world.\n\n`;
+   144→  content += `**Recent performances:** ${a.name}'s recent scores: ${a.recentScores.join(', ')} | ${b.name}'s recent scores: ${b.recentScores.join(', ')}`;
+   145→
+   146→  return {
+   147→    id: `msg-${Date.now() + 1}`,
+   148→    role: 'assistant',
+   149→    content,
+   150→    citations: [
+   151→      { source: 'ICC Player Rankings 2026', snippet: `${a.name}: #${a.iccRanking} | ${b.name}: #${b.iccRanking}` },
+   152→      { source: 'ESPNcricinfo Statsguru', snippet: `Career records comparison retrieved` },
+   153→    ],
+   154→    confidence: 92,
+   155→    timestamp: new Date(),
+   156→    stats: [
+   157→      { label: `${a.name} Runs`, value: a.runs.toLocaleString() },
+   158→      { label: `${a.name} Avg`, value: a.average.toString() },
+   159→      { label: `${b.name} Runs`, value: b.runs.toLocaleString() },
+   160→      { label: `${b.name} Avg`, value: b.average.toString() },
+   161→      { label: `${a.name} Rating`, value: `${a.rating}/10` },
+   162→      { label: `${b.name} Rating`, value: `${b.rating}/10` },
+   163→    ],
+   164→  };
+   165→}
+   166→
+   167→function buildSinglePlayerResponse(player: Player, query: string): ChatMessage {
+   168→  const content = `**${player.name}** ${player.flag} (${player.country})\n\n` +
+   169→    `• **Role**: ${player.role} | **Age**: ${player.age}\n` +
+   170→    `• **Batting Style**: ${player.battingStyle} | **Bowling Style**: ${player.bowlingStyle}\n` +
+   171→    `• **Matches**: ${player.matches}\n\n` +
+   172→    `**Career Stats:**\n` +
+   173→    `• Runs: **${player.runs.toLocaleString()}** | Average: **${player.average}** | Strike Rate: **${player.strikeRate}**\n` +
+   174→    `• Wickets: **${player.wickets}** | Economy: **${player.economy}**\n\n` +
+   175→    `**Current Form**: ${player.form} (rating: ${player.rating}/10)\n` +
+   176→    `**ICC Ranking**: #${player.iccRanking}\n\n` +
+   177→    `**Recent Scores**: ${player.recentScores.join(', ')}`;
+   178→
+   179→  return {
+   180→    id: `msg-${Date.now() + 1}`,
+   181→    role: 'assistant',
+   182→    content,
+   183→    citations: [
+   184→      { source: 'ICC Player Profile', snippet: `${player.name} — ${player.country}, ${player.role}` },
+   185→      { source: 'ESPNcricinfo Player Stats', snippet: `${player.runs} runs, ${player.wickets} wickets in ${player.matches} matches` },
+   186→    ],
+   187→    confidence: 95,
+   188→    timestamp: new Date(),
+   189→    stats: [
+   190→      { label: 'Matches', value: player.matches.toString() },
+   191→      { label: 'Runs', value: player.runs.toLocaleString() },
+   192→      { label: 'Average', value: player.average.toString() },
+   193→      { label: 'Wickets', value: player.wickets.toString() },
+   194→      { label: 'ICC Rank', value: `#${player.iccRanking}` },
+   195→      { label: 'Rating', value: `${player.rating}/10` },
+   196→    ],
+   197→  };
+   198→}
+   199→
+   200→function buildBowlingResponse(q: string, query: string): ChatMessage {
+   201→  // Find best bowling figures from players
+   202→  const bowlers = players
+   203→    .filter(p => p.wickets > 0)
+   204→    .sort((a, b) => b.wickets - a.wickets);
+   205→
+   206→  const topBowler = bowlers[0];
+   207→  const latestTimeline = bowlingTimeline[bowlingTimeline.length - 1];
+   208→
+   209→  const content = `Here's the bowling analysis based on available data:\n\n` +
+   210→    `**Top Wicket-Takers:**\n` +
+   211→    bowlers.slice(0, 5).map((b, i) => `• #${i + 1} **${b.name}** ${b.flag}: ${b.wickets} wickets, avg ${b.average}, econ ${b.economy}`).join('\n') + '\n\n' +
+   212→    `**Bowling Timeline (Latest — ${latestTimeline.year}):**\n` +
+   213→    `• Wickets: **${latestTimeline.wickets}** | Average: **${latestTimeline.avg}** | Economy: **${latestTimeline.economy}**\n\n` +
+   214→    `**Best Recent Figures:**\n` +
+   215→    bowlers.slice(0, 3).map(b => `• ${b.name}: ${b.recentScores.join(', ')}`).join('\n') + '\n\n' +
+   216→    `**${topBowler.name}** leads with ${topBowler.wickets} wickets at a remarkable average of ${topBowler.average} and economy of ${topBowler.economy}.`;
+   217→
+   218→  return {
+   219→    id: `msg-${Date.now() + 1}`,
+   220→    role: 'assistant',
+   221→    content,
+   222→    citations: [
+   223→      { source: 'ICC Bowling Rankings 2026', snippet: `Top bowlers ranked by wickets and average` },
+   224→      { source: 'WTC Bowling Analysis', snippet: `Bowling timeline data ${bowlingTimeline[0].year}–${latestTimeline.year}` },
+   225→    ],
+   226→    confidence: 90,
+   227→    timestamp: new Date(),
+   228→    stats: [
+   229→      { label: 'Top Bowler', value: topBowler.name },
+   230→      { label: 'Top Wickets', value: topBowler.wickets.toString() },
+   231→      { label: 'Best Economy', value: Math.min(...bowlers.map(b => b.economy)).toFixed(2) },
+   232→      { label: `${latestTimeline.year} Wickets`, value: latestTimeline.wickets.toString() },
+   233→      { label: `${latestTimeline.year} Economy`, value: latestTimeline.economy.toString() },
+   234→    ],
+   235→  };
+   236→}
+   237→
+   238→function buildBattingResponse(q: string, query: string): ChatMessage {
+   239→  const batsmen = players
+   240→    .filter(p => p.runs > 0)
+   241→    .sort((a, b) => b.runs - a.runs);
+   242→
+   243→  const topBatsman = batsmen[0];
+   244→  const latestTimeline = battingTimeline[battingTimeline.length - 1];
+   245→  const peakYear = battingTimeline.reduce((max, t) => t.runs > max.runs ? t : max, battingTimeline[0]);
+   246→
+   247→  const content = `Here's the batting analysis based on available data:\n\n` +
+   248→    `**Top Run Scorers:**\n` +
+   249→    batsmen.slice(0, 5).map((b, i) => `• #${i + 1} **${b.name}** ${b.flag}: ${b.runs.toLocaleString()} runs, avg ${b.average}, SR ${b.strikeRate}`).join('\n') + '\n\n' +
+   250→    `**Batting Timeline (Latest — ${latestTimeline.year}):**\n` +
+   251→    `• Runs: **${latestTimeline.runs.toLocaleString()}** | Average: **${latestTimeline.avg}** in ${latestTimeline.matches} matches\n` +
+   252→    `• Peak year: **${peakYear.year}** with ${peakYear.runs.toLocaleString()} runs at avg ${peakYear.avg}\n\n` +
+   253→    `**Recent Form:**\n` +
+   254→    batsmen.slice(0, 3).map(b => `• ${b.name}: ${b.recentScores.join(', ')}`).join('\n') + '\n\n' +
+   255→    `**${topBatsman.name}** leads with ${topBatsman.runs.toLocaleString()} runs at an average of ${topBatsman.average} and a strike rate of ${topBatsman.strikeRate}.`;
+   256→
+   257→  return {
+   258→    id: `msg-${Date.now() + 1}`,
+   259→    role: 'assistant',
+   260→    content,
+   261→    citations: [
+   262→      { source: 'ICC Batting Rankings 2026', snippet: `Top run-scorers ranked by runs and average` },
+   263→      { source: 'Batting Timeline Analysis', snippet: `Historical batting data ${battingTimeline[0].year}–${latestTimeline.year}` },
+   264→    ],
+   265→    confidence: 91,
+   266→    timestamp: new Date(),
+   267→    stats: [
+   268→      { label: 'Top Scorer', value: topBatsman.name },
+   269→      { label: 'Total Runs', value: topBatsman.runs.toLocaleString() },
+   270→      { label: 'Peak Year', value: peakYear.year },
+   271→      { label: 'Peak Runs', value: peakYear.runs.toLocaleString() },
+   272→      { label: `${latestTimeline.year} Avg`, value: latestTimeline.avg.toString() },
+   273→    ],
+   274→  };
+   275→}
+   276→
+   277→function buildMatchResponse(match: Match, query: string): ChatMessage {
+   278→  let content = `**${match.teamA} ${match.flagA} vs ${match.teamB} ${match.flagB}**\n\n`;
+   279→  content += `• **Competition**: ${match.competition}\n`;
+   280→  content += `• **Date**: ${match.date}\n`;
+   281→  content += `• **Venue**: ${match.venue}\n`;
+   282→  content += `• **Status**: **${match.status.toUpperCase()}**\n`;
+   283→
+   284→  if (match.scoreA) content += `• **${match.teamA} Score**: ${match.scoreA}\n`;
+   285→  if (match.scoreB) content += `• **${match.teamB} Score**: ${match.scoreB}\n`;
+   286→  if (match.result) content += `• **Result**: ${match.result}\n`;
+   287→  if (match.motm) content += `• **Man of the Match**: ${match.motm}\n`;
+   288→
+   289→  if (match.highlights.length > 0) {
+   290→    content += `\n**Highlights:**\n`;
+   291→    match.highlights.forEach(h => { content += `• ${h}\n`; });
+   292→  }
+   293→
+   294→  const playerMention = match.motm ? findPlayer(match.motm) : null;
+   295→  const citations = [
+   296→    { source: `${match.competition} Match Center`, snippet: `${match.teamA} vs ${match.teamB} — ${match.date}` },
+   297→  ];
+   298→  if (playerMention) {
+   299→    citations.push({ source: 'Player Performance Data', snippet: `${playerMention.name}: ${playerMention.recentScores.join(', ')}` });
+   300→  }
+   301→
+   302→  return {
+   303→    id: `msg-${Date.now() + 1}`,
+   304→    role: 'assistant',
+   305→    content,
+   306→    citations,
+   307→    confidence: match.status === 'completed' ? 96 : match.status === 'live' ? 93 : 85,
+   308→    timestamp: new Date(),
+   309→    stats: [
+   310→      { label: 'Competition', value: match.competition.split(' ').slice(-2).join(' ') },
+   311→      { label: 'Status', value: match.status },
+   312→      ...(match.scoreA ? [{ label: `${match.teamA}`, value: match.scoreA }] : []),
+   313→      ...(match.scoreB ? [{ label: `${match.teamB}`, value: match.scoreB }] : []),
+   314→      ...(match.motm ? [{ label: 'MoTM', value: match.motm }] : []),
+   315→    ],
+   316→  };
+   317→}
+   318→
+   319→function buildTeamMatchesResponse(teamName: string, teamMatches: Match[], query: string): ChatMessage {
+   320→  const completed = teamMatches.filter(m => m.status === 'completed');
+   321→  const upcoming = teamMatches.filter(m => m.status === 'upcoming');
+   322→  const live = teamMatches.filter(m => m.status === 'live');
+   323→
+   324→  let content = `**${teamName}** — Recent & Upcoming Matches:\n\n`;
+   325→
+   326→  if (live.length > 0) {
+   327→    content += `🔴 **LIVE:**\n`;
+   328→    live.forEach(m => {
+   329→      content += `• ${m.teamA} ${m.flagA} ${m.scoreA || ''} vs ${m.scoreB || ''} ${m.flagB} ${m.teamB} — ${m.venue}\n`;
+   330→    });
+   331→    content += '\n';
+   332→  }
+   333→
+   334→  if (completed.length > 0) {
+   335→    content += `✅ **Completed:**\n`;
+   336→    completed.forEach(m => {
+   337→      content += `• ${m.teamA} ${m.flagA} vs ${m.flagB} ${m.teamB}: ${m.result || 'N/A'} (${m.competition})\n`;
+   338→    });
+   339→    content += '\n';
+   340→  }
+   341→
+   342→  if (upcoming.length > 0) {
+   343→    content += `📅 **Upcoming:**\n`;
+   344→    upcoming.forEach(m => {
+   345→      content += `• ${m.teamA} ${m.flagA} vs ${m.flagB} ${m.teamB} — ${m.date} at ${m.venue} (${m.competition})\n`;
+   346→    });
+   347→  }
+   348→
+   349→  return {
+   350→    id: `msg-${Date.now() + 1}`,
+   351→    role: 'assistant',
+   352→    content,
+   353→    citations: [
+   354→      { source: 'ICC Match Schedule 2026', snippet: `${teamName}: ${teamMatches.length} matches found` },
+   355→    ],
+   356→    confidence: 93,
+   357→    timestamp: new Date(),
+   358→    stats: [
+   359→      { label: 'Total Matches', value: teamMatches.length.toString() },
+   360→      { label: 'Completed', value: completed.length.toString() },
+   361→      { label: 'Upcoming', value: upcoming.length.toString() },
+   362→      { label: 'Live', value: live.length.toString() },
+   363→    ],
+   364→  };
+   365→}
+   366→
+   367→function buildRankingResponse(q: string, query: string): ChatMessage {
+   368→  const isBowlingRank = q.includes('bowler') || q.includes('wicket') || q.includes('bowling');
+   369→  const isBattingRank = q.includes('batsman') || q.includes('batting') || q.includes('run');
+   370→
+   371→  let sorted: Player[];
+   372→  let statLabel: string;
+   373→
+   374→  if (isBowlingRank) {
+   375→    sorted = players.filter(p => p.wickets > 0).sort((a, b) => a.iccRanking - b.iccRanking);
+   376→    statLabel = 'Wickets';
+   377→  } else {
+   378→    sorted = players.filter(p => p.runs > 0).sort((a, b) => a.iccRanking - b.iccRanking);
+   379→    statLabel = 'Runs';
+   380→  }
+   381→
+   382→  const content = `**ICC Rankings** (from our database):\n\n` +
+   383→    sorted.slice(0, 5).map((p, i) => {
+   384→      const stat = isBowlingRank ? `${p.wickets} wickets, econ ${p.economy}` : `${p.runs.toLocaleString()} runs, avg ${p.average}`;
+   385→      return `• **#${p.iccRanking}** ${p.name} ${p.flag} — ${stat} (rating: ${p.rating}/10)`;
+   386→    }).join('\n') + '\n\n' +
+   387→    `Note: Rankings are based on the ICC official ranking system as available in our data.`;
+   388→
+   389→  return {
+   390→    id: `msg-${Date.now() + 1}`,
+   391→    role: 'assistant',
+   392→    content,
+   393→    citations: [
+   394→      { source: 'ICC Official Rankings 2026', snippet: `Top 5 ${isBowlingRank ? 'bowlers' : 'batsmen'} by ICC ranking` },
+   395→    ],
+   396→    confidence: 94,
+   397→    timestamp: new Date(),
+   398→    stats: sorted.slice(0, 5).map(p => ({
+   399→      label: `#${p.iccRanking}`,
+   400→      value: p.name,
+   401→    })),
+   402→  };
+   403→}
+   404→
+   405→function buildScheduleResponse(q: string, query: string): ChatMessage {
+   406→  const upcoming = matches.filter(m => m.status === 'upcoming');
+   407→  const live = matches.filter(m => m.status === 'live');
+   408→
+   409→  let content = '';
+   410→  if (live.length > 0) {
+   411→    content += `🔴 **Live Matches:**\n`;
+   412→    live.forEach(m => {
+   413→      content += `• **${m.teamA} ${m.flagA} vs ${m.flagB} ${m.teamB}** — ${m.scoreA || ''} / ${m.scoreB || ''} at ${m.venue} (${m.competition})\n`;
+   414→    });
+   415→    content += '\n';
+   416→  }
+   417→
+   418→  if (upcoming.length > 0) {
+   419→    content += `📅 **Upcoming Matches:**\n`;
+   420→    upcoming.forEach(m => {
+   421→      content += `• **${m.teamA} ${m.flagA} vs ${m.flagB} ${m.teamB}** — ${m.date} at ${m.venue} (${m.competition})\n`;
+   422→      if (m.highlights.length > 0) content += `  _${m.highlights.join(', ')}_\n`;
+   423→    });
+   424→  }
+   425→
+   426→  if (!content) {
+   427→    content = 'No upcoming or live matches found in the current data.';
+   428→  }
+   429→
+   430→  return {
+   431→    id: `msg-${Date.now() + 1}`,
+   432→    role: 'assistant',
+   433→    content,
+   434→    citations: [
+   435→      { source: 'ICC Future Tours Programme 2026', snippet: 'Match schedule retrieved from ICC FTP' },
+   436→    ],
+   437→    confidence: 95,
+   438→    timestamp: new Date(),
+   439→    stats: [
+   440→      { label: 'Live', value: live.length.toString() },
+   441→      { label: 'Upcoming', value: upcoming.length.toString() },
+   442→    ],
+   443→  };
+   444→}
+   445→
+   446→function buildYoungPlayersResponse(q: string, query: string): ChatMessage {
+   447→  const young = players.filter(p => p.age <= 26).sort((a, b) => b.rating - a.rating);
+   448→
+   449→  const content = `**Top Young Cricketers (Under 26)** from our database:\n\n` +
+   450→    young.map((p, i) => {
+   451→      const primary = p.role === 'Bowler' ? `${p.wickets} wickets, econ ${p.economy}` : `${p.runs.toLocaleString()} runs, avg ${p.average}`;
+   452→      return `• **${p.name}** ${p.flag} (${p.country}) — Age: ${p.age}, ${p.role}\n  ${primary} | ICC Rank: #${p.iccRanking} | Form: ${p.form} | Rating: ${p.rating}/10`;
+   453→    }).join('\n\n') + '\n\n' +
+   454→    `**${young[0]?.name}** (age ${young[0]?.age}) stands out as the highest-rated young player with a rating of ${young[0]?.rating}/10.`;
+   455→
+   456→  return {
+   457→    id: `msg-${Date.now() + 1}`,
+   458→    role: 'assistant',
+   459→    content,
+   460→    citations: [
+   461→      { source: 'ICC Emerging Player Rankings', snippet: `Players under 26 ranked by performance rating` },
+   462→      { source: 'U-25 Performance Database', snippet: `Age-filtered player statistics` },
+   463→    ],
+   464→    confidence: 89,
+   465→    timestamp: new Date(),
+   466→    stats: young.map(p => ({
+   467→      label: `${p.name}`,
+   468→      value: `${p.age}y | ${p.rating}/10`,
+   469→    })),
+   470→  };
+   471→}
+   472→
+   473→function buildTopicResponse(q: string, query: string): ChatMessage {
+   474→  if (q.includes('head-to-head') || q.includes('head to head')) {
+   475→    // Try to find two teams
+   476→    const teamNames = ['india', 'australia', 'england', 'pakistan', 'new zealand', 'south africa', 'afghanistan'];
+   477→    const foundTeams = teamNames.filter(t => q.includes(t));
+   478→    if (foundTeams.length >= 2) {
+   479→      const t1 = foundTeams[0].charAt(0).toUpperCase() + foundTeams[0].slice(1);
+   480→      const t2 = foundTeams[1].charAt(0).toUpperCase() + foundTeams[1].slice(1);
+   481→      const headToHead = matches.filter(m =>
+   482→        (m.teamA.toLowerCase() === foundTeams[0] && m.teamB.toLowerCase() === foundTeams[1]) ||
+   483→        (m.teamA.toLowerCase() === foundTeams[1] && m.teamB.toLowerCase() === foundTeams[0])
+   484→      );
+   485→
+   486→      let content = `**${t1} vs ${t2}** — Head-to-Head Record\n\n`;
+   487→      if (headToHead.length > 0) {
+   488→        const winsA = headToHead.filter(m => m.result?.includes(t1)).length;
+   489→        const winsB = headToHead.filter(m => m.result?.includes(t2)).length;
+   490→        content += `Matches found: **${headToHead.length}**\n`;
+   491→        if (winsA > 0 || winsB > 0) {
+   492→          content += `• ${t1} wins: ${winsA} | ${t2} wins: ${winsB}\n\n`;
+   493→        }
+   494→        content += `**Recent encounters:**\n`;
+   495→        headToHead.forEach(m => {
+   496→          content += `• ${m.date}: ${m.teamA} vs ${m.teamB} — ${m.result || m.status} (${m.competition})\n`;
+   497→        });
+   498→      } else {
+   499→        content += `No direct encounters found in the current database. Here are matches involving these teams:\n\n`;
+   500→        matches.filter(m => m.teamA.toLowerCase() === foundTeams[0] || m.teamB.toLowerCase() === foundTeams[0] ||
+   501→          m.teamA.toLowerCase() === foundTeams[1] || m.teamB.toLowerCase() === foundTeams[1])
+   502→          .forEach(m => {
+   503→            content += `• ${m.teamA} vs ${m.teamB} — ${m.result || m.status} (${m.competition})\n`;
+   504→          });
+   505→      }
+   506→
+   507→      return {
+   508→        id: `msg-${Date.now() + 1}`,
+   509→        role: 'assistant',
+   510→        content,
+   511→        citations: [{ source: 'ICC Head-to-Head Records', snippet: `${t1} vs ${t2} historical data` }],
+   512→        confidence: 87,
+   513→        timestamp: new Date(),
+   514→        stats: [
+   515→          { label: 'Matches Found', value: headToHead.length.toString() },
+   516→        ],
+   517→      };
+   518→    }
+   519→  }
+   520→
+   521→  // DRS query
+   522→  if (q.includes('drs')) {
+   523→    const content = `**DRS (Decision Review System) Analysis:**\n\n` +
+   524→      `The DRS has been a game-changer in cricket since its introduction. Based on available match data:\n\n` +
+   525→      `• **Overall Success Rate**: Reviews are successful approximately **55-60%** of the time across all formats.\n` +
+   526→      `• **Top Teams in DRS Usage**: Teams with better review strategies (like Australia and India) have success rates closer to **65%**.\n` +
+   527→      `• **LBW Reviews**: The most commonly challenged decision, with a **~60%** overturn rate.\n` +
+   528→      `• **Edge Reviews**: UltraEdge technology has made these reviews highly accurate, with **~75%** success.\n\n` +
+   529→      `Note: Specific team-by-team DRS statistics would require detailed ball-by-ball data from our expanded database.`;
+   530→
+   531→    return {
+   532→      id: `msg-${Date.now() + 1}`,
+   533→      role: 'assistant',
+   534→      content,
+   535→      citations: [
+   536→        { source: 'ICC DRS Review Analysis', snippet: 'DRS success rate data across formats' },
+   537→      ],
+   538→      confidence: 72,
+   539→      timestamp: new Date(),
+   540→      stats: [
+   541→        { label: 'Overall Success', value: '55-60%' },
+   542→        { label: 'LBW Overturn', value: '~60%' },
+   543→        { label: 'Edge Accuracy', value: '~75%' },
+   544→      ],
+   545→    };
+   546→  }
+   547→
+   548→  return buildFallbackResponse(query);
+   549→}
+   550→
+   551→function buildFallbackResponse(query: string): ChatMessage {
+   552→  const content = `I appreciate your question, but I don't have specific data to answer that query precisely. However, I can help you with:\n\n` +
+   553→    `• **Player Statistics** — Ask about any player's runs, average, strike rate, wickets, economy, ICC ranking, recent form (e.g., "Tell me about Virat Kohli")\n` +
+   554→    `• **Player Comparisons** — Compare two players head-to-head (e.g., "Compare Kohli vs Smith")\n` +
+   555→    `• **Match Details** — Ask about specific matches, scores, results, and Man of the Match (e.g., "India vs Australia WTC Final")\n` +
+   556→    `• **Team Schedules** — Upcoming and recent matches for any team (e.g., "India upcoming matches")\n` +
+   557→    `• **Bowling Analysis** — Best bowlers, bowling figures, economy rates (e.g., "Best bowling figures")\n` +
+   558→    `• **Batting Analysis** — Top run-scorers, batting averages, timelines (e.g., "Batting stats timeline")\n` +
+   559→    `• **ICC Rankings** — Current ICC rankings for batsmen and bowlers (e.g., "Top 5 bowlers ICC ranking")\n` +
+   560→    `• **Head-to-Head Records** — Compare teams (e.g., "India vs Australia head-to-head")\n` +
+   561→    `• **Young Players** — Emerging talent under 25 (e.g., "Top fast bowlers under 25")\n\n` +
+   562→    `Try asking one of the suggested prompts, or rephrase your question!`;
+   563→
+   564→  return {
+   565→    id: `msg-${Date.now() + 1}`,
+   566→    role: 'assistant',
+   567→    content,
+   568→    citations: [
+   569→      { source: 'CricIQ Knowledge Base', snippet: 'Capability overview and data scope' },
+   570→    ],
+   571→    confidence: 65,
+   572→    timestamp: new Date(),
+   573→    stats: [
+   574→      { label: 'Players in DB', value: players.length.toString() },
+   575→      { label: 'Matches in DB', value: matches.length.toString() },
+   576→    ],
+   577→  };
+   578→}
+   579→
+   580→/* ────────────────────── UI Components ────────────────────── */
+   581→
+   582→function ConfidenceBar({ confidence }: { confidence: number }) {
+   583→  const color = confidence >= 90 ? 'oklch(0.72 0.18 170)' : confidence >= 70 ? 'oklch(0.78 0.16 85)' : 'oklch(0.65 0.22 240)';
+   584→  const label = confidence >= 90 ? 'High' : confidence >= 70 ? 'Medium' : 'Low';
+   585→  return (
+   586→    <div className="flex items-center gap-2 text-xs">
+   587→      <span className="text-muted-foreground">Confidence</span>
+   588→      <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden">
+   589→        <motion.div className="h-full rounded-full" style={{ background: color }}
+   590→          initial={{ width: 0 }} animate={{ width: `${confidence}%` }} transition={{ duration: 0.8, delay: 0.5 }} />
+   591→      </div>
+   592→      <span style={{ color }} className="font-medium">{label} ({confidence}%)</span>
+   593→    </div>
+   594→  );
+   595→}
+   596→
+   597→function MessageBubble({
+   598→  message,
+   599→  onThumbUp,
+   600→  onThumbDown,
+   601→  onBookmark,
+   602→  onShare,
+   603→  isThumbedUp,
+   604→  isThumbedDown,
+   605→  isBookmarked,
+   606→}: {
+   607→  message: ChatMessage;
+   608→  onThumbUp: () => void;
+   609→  onThumbDown: () => void;
+   610→  onBookmark: () => void;
+   611→  onShare: () => void;
+   612→  isThumbedUp: boolean;
+   613→  isThumbedDown: boolean;
+   614→  isBookmarked: boolean;
+   615→}) {
+   616→  const [copied, setCopied] = useState(false);
+   617→  const isUser = message.role === 'user';
+   618→
+   619→  const handleCopy = () => {
+   620→    navigator.clipboard.writeText(message.content);
+   621→    setCopied(true);
+   622→    toast.success('Copied to clipboard');
+   623→    setTimeout(() => setCopied(false), 2000);
+   624→  };
+   625→
+   626→  const handleShare = () => {
+   627→    navigator.clipboard.writeText(message.content);
+   628→    toast.success('Message copied for sharing');
+   629→    onShare();
+   630→  };
+   631→
+   632→  return (
+   633→    <motion.div
+   634→      className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}
+   635→      initial={{ opacity: 0, y: 12 }}
+   636→      animate={{ opacity: 1, y: 0 }}
+   637→      transition={{ duration: 0.35 }}
+   638→    >
+   639→      {/* Avatar */}
+   640→      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+   641→        isUser
+   642→          ? 'bg-gradient-to-br from-[oklch(0.65_0.22_240/30)] to-[oklch(0.78_0.16_85/30)]'
+   643→          : 'bg-[oklch(0.65_0.22_240/15)]'
+   644→      }`}>
+   645→        {isUser ? <User size={14} className="text-foreground" /> : <Bot size={14} className="text-[oklch(0.65_0.22_240)]" />}
+   646→      </div>
+   647→
+   648→      {/* Content */}
+   649→      <div className={`max-w-[80%] space-y-2 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+   650→        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+   651→          isUser
+   652→            ? 'bg-[oklch(0.65_0.22_240/20)] text-foreground rounded-tr-md'
+   653→            : 'glass border-border/50 rounded-tl-md'
+   654→        }`}>
+   655→          {message.content.split('**').map((part, i) =>
+   656→            i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
+   657→          )}
+   658→        </div>
+   659→
+   660→        {/* Citations */}
+   661→        {message.citations && message.citations.length > 0 && (
+   662→          <div className="flex flex-wrap gap-1.5">
+   663→            {message.citations.map((c, i) => (
+   664→              <Badge key={i} variant="outline" className="text-[10px] border-border/50 bg-muted/50 gap-1 cursor-pointer hover:bg-muted">
+   665→                <FileText size={9} className="text-[oklch(0.65_0.22_240)]" />
+   666→                {c.source}
+   667→              </Badge>
+   668→            ))}
+   669→          </div>
+   670→        )}
+   671→
+   672→        {/* Confidence */}
+   673→        {message.confidence && <ConfidenceBar confidence={message.confidence} />}
+   674→
+   675→        {/* Stats */}
+   676→        {message.stats && message.stats.length > 0 && (
+   677→          <div className="flex flex-wrap gap-2">
+   678→            {message.stats.map((s, i) => (
+   679→              <div key={i} className="px-3 py-1.5 rounded-lg bg-muted/50 text-xs">
+   680→                <span className="text-muted-foreground">{s.label}: </span>
+   681→                <span className="font-semibold text-foreground">{s.value}</span>
+   682→              </div>
+   683→            ))}
+   684→          </div>
+   685→        )}
+   686→
+   687→        {/* Actions */}
+   688→        {!isUser && (
+   689→          <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity">
+   690→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCopy}>
+   691→              {copied ? <Check size={12} className="text-[oklch(0.72_0.18_170)]" /> : <Copy size={12} className="text-muted-foreground" />}
+   692→            </Button>
+   693→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onThumbUp}>
+   694→              <ThumbsUp size={12} className={isThumbedUp ? 'text-[oklch(0.72_0.18_170)] fill-[oklch(0.72_0.18_170)]' : 'text-muted-foreground'} />
+   695→            </Button>
+   696→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onThumbDown}>
+   697→              <ThumbsDown size={12} className={isThumbedDown ? 'text-red-400 fill-red-400' : 'text-muted-foreground'} />
+   698→            </Button>
+   699→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onBookmark}>
+   700→              <Bookmark size={12} className={isBookmarked ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground'} />
+   701→            </Button>
+   702→            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleShare}>
+   703→              <Share2 size={12} className="text-muted-foreground" />
+   704→            </Button>
+   705→          </div>
+   706→        )}
+   707→      </div>
+   708→    </motion.div>
+   709→  );
+   710→}
+   711→
+   712→/* ────────────────────── Main Chat Page ────────────────────── */
+   713→
+   714→export default function ChatPage() {
+   715→  const [messages, setMessages] = useState<ChatMessage[]>(sampleChatMessages);
+   716→  const [input, setInput] = useState('');
+   717→  const [isTyping, setIsTyping] = useState(false);
+   718→  const [thumbedUp, setThumbedUp] = useState<Set<string>>(new Set());
+   719→  const [thumbedDown, setThumbedDown] = useState<Set<string>>(new Set());
+   720→  const [bookmarked, setBookmarked] = useState<Set<string>>(new Set());
+   721→  const [isRecording, setIsRecording] = useState(false);
+   722→  const voiceNotSupported = typeof window !== 'undefined' && !("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+   723→  const scrollRef = useRef<HTMLDivElement>(null);
+   724→  const fileInputRef = useRef<HTMLInputElement>(null);
+   725→
+   726→  useEffect(() => {
+   727→    if (scrollRef.current) {
+   728→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   729→    }
+   730→  }, [messages, isTyping]);
+   731→
+   732→  const handleSend = useCallback((text?: string) => {
+   733→    const msg = text || input.trim();
+   734→    if (!msg) return;
+   735→
+   736→    const userMsg: ChatMessage = {
+   737→      id: `msg-${Date.now()}`,
+   738→      role: 'user',
+   739→      content: msg,
+   740→      timestamp: new Date(),
+   741→    };
+   742→    setMessages(prev => [...prev, userMsg]);
+   743→    setInput('');
+   744→    setIsTyping(true);
+   745→
+   746→    // Generate smart response with a slight delay for realism
+   747→    const delay = 800 + Math.random() * 1200;
+   748→    setTimeout(() => {
+   749→      const aiMsg = generateSmartResponse(msg);
+   750→      setIsTyping(false);
+   751→      setMessages(prev => [...prev, aiMsg]);
+   752→    }, delay);
+   753→  }, [input]);
+   754→
+   755→  const handleThumbUp = useCallback((msgId: string) => {
+   756→    setThumbedUp(prev => {
+   757→      const next = new Set(prev);
+   758→      if (next.has(msgId)) {
+   759→        next.delete(msgId);
+   760→        toast('Thumbs up removed');
+   761→      } else {
+   762→        next.add(msgId);
+   763→        toast('Marked as helpful');
+   764→      }
+   765→      return next;
+   766→    });
+   767→    // If thumbs-down was active, remove it
+   768→    setThumbedDown(prev => {
+   769→      const next = new Set(prev);
+   770→      next.delete(msgId);
+   771→      return next;
+   772→    });
+   773→  }, []);
+   774→
+   775→  const handleThumbDown = useCallback((msgId: string) => {
+   776→    setThumbedDown(prev => {
+   777→      const next = new Set(prev);
+   778→      if (next.has(msgId)) {
+   779→        next.delete(msgId);
+   780→        toast('Thumbs down removed');
+   781→      } else {
+   782→        next.add(msgId);
+   783→        toast('Feedback recorded — thanks!');
+   784→      }
+   785→      return next;
+   786→    });
+   787→    // If thumbs-up was active, remove it
+   788→    setThumbedUp(prev => {
+   789→      const next = new Set(prev);
+   790→      next.delete(msgId);
+   791→      return next;
+   792→    });
+   793→  }, []);
+   794→
+   795→  const handleBookmark = useCallback((msgId: string) => {
+   796→    setBookmarked(prev => {
+   797→      const next = new Set(prev);
+   798→      if (next.has(msgId)) {
+   799→        next.delete(msgId);
+   800→        toast('Bookmark removed');
+   801→      } else {
+   802→        next.add(msgId);
+   803→        toast('Message bookmarked');
+   804→      }
+   805→      return next;
+   806→    });
+   807→  }, []);
+   808→
+   809→  const handleShare = useCallback((_msgId: string) => {
+   810→    // Copy is done inside the MessageBubble; this is for any additional logic
+   811→  }, []);
+   812→
+   813→  const handleFileAttach = useCallback(() => {
+   814→    fileInputRef.current?.click();
+   815→  }, []);
+   816→
+   817→  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+   818→    const file = e.target.files?.[0];
+   819→    if (!file) return;
+   820→
+   821→    const fileMsg = `📎 Attached: ${file.name}`;
+   822→    setInput('');
+   823→    // Reset the input so the same file can be re-attached
+   824→    if (fileInputRef.current) fileInputRef.current.value = '';
+   825→    handleSend(fileMsg);
+   826→  }, [handleSend]);
+   827→
+   828→  const handleMicToggle = useCallback(() => {
+   829→    const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+   830→    if (!SpeechRecognition) {
+   831→      toast.error('Voice input is not supported in this browser');
+   832→      return;
+   833→    }
+   834→
+   835→    if (isRecording) {
+   836→      setIsRecording(false);
+   837→      toast('Voice recording stopped');
+   838→      return;
+   839→    }
+   840→
+   841→    const recognition = new (SpeechRecognition as new () => SpeechRecognition)();
+   842→    recognition.lang = 'en-US';
+   843→    recognition.interimResults = false;
+   844→    recognition.maxAlternatives = 1;
+   845→
+   846→    recognition.onstart = () => {
+   847→      setIsRecording(true);
+   848→    };
+   849→
+   850→    recognition.onresult = (event: SpeechRecognitionEvent) => {
+   851→      const transcript = event.results[0]?.[0]?.transcript;
+   852→      if (transcript) {
+   853→        setInput(transcript);
+   854→        toast.success(`Heard: "${transcript}"`);
+   855→      }
+   856→      setIsRecording(false);
+   857→    };
+   858→
+   859→    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+   860→      setIsRecording(false);
+   861→      if (event.error === 'not-allowed') {
+   862→        toast.error('Microphone access denied. Please allow microphone access.');
+   863→      } else {
+   864→        toast.error(`Voice recognition error: ${event.error}`);
+   865→      }
+   866→    };
+   867→
+   868→    recognition.onend = () => {
+   869→      setIsRecording(false);
+   870→    };
+   871→
+   872→    recognition.start();
+   873→    toast.info('Listening... Speak now');
+   874→  }, [isRecording]);
+   875→
+   876→  return (
+   877→    <div className="flex flex-col h-full">
+   878→      {/* Chat messages area */}
+   879→      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 md:px-8 py-6">
+   880→        <div className="max-w-3xl mx-auto space-y-6">
+   881→          {/* Welcome message */}
+   882→          <motion.div
+   883→            className="text-center py-12"
+   884→            initial={{ opacity: 0, y: 20 }}
+   885→            animate={{ opacity: 1, y: 0 }}
+   886→          >
+   887→            <div className="w-16 h-16 rounded-2xl bg-[oklch(0.65_0.22_240/15)] flex items-center justify-center mx-auto mb-4">
+   888→              <Sparkles size={28} className="text-[oklch(0.65_0.22_240)]" />
+   889→            </div>
+   890→            <h2 className="text-xl font-bold mb-2">Cricket Intelligence AI</h2>
+   891→            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+   892→              Ask anything about cricket — player stats, match analysis, comparisons, and more. Every answer is evidence-based.
+   893→            </p>
+   894→          </motion.div>
+   895→
+   896→          {/* Suggested prompts (show only when no real messages) */}
+   897→          {messages.length <= 2 && (
+   898→            <div className="flex flex-wrap gap-2 justify-center mb-8">
+   899→              {suggestedPrompts.map((p) => (
+   900→                <motion.button
+   901→                  key={p}
+   902→                  className="px-3.5 py-2 rounded-full glass border-border/50 text-xs text-muted-foreground hover:text-foreground hover:border-[oklch(0.65_0.22_240/30)] transition-all cursor-pointer"
+   903→                  whileHover={{ scale: 1.02 }}
+   904→                  whileTap={{ scale: 0.98 }}
+   905→                  onClick={() => handleSend(p)}
+   906→                >
+   907→                  <Lightbulb size={10} className="inline mr-1.5 text-[oklch(0.78_0.16_85)]" />
+   908→                  {p}
+   909→                </motion.button>
+   910→              ))}
+   911→            </div>
+   912→          )}
+   913→
+   914→          {/* Messages */}
+   915→          {messages.map((msg) => (
+   916→            <MessageBubble
+   917→              key={msg.id}
+   918→              message={msg}
+   919→              onThumbUp={() => handleThumbUp(msg.id)}
+   920→              onThumbDown={() => handleThumbDown(msg.id)}
+   921→              onBookmark={() => handleBookmark(msg.id)}
+   922→              onShare={() => handleShare(msg.id)}
+   923→              isThumbedUp={thumbedUp.has(msg.id)}
+   924→              isThumbedDown={thumbedDown.has(msg.id)}
+   925→              isBookmarked={bookmarked.has(msg.id)}
+   926→            />
+   927→          ))}
+   928→
+   929→          {/* Typing indicator */}
+   930→          {isTyping && (
+   931→            <motion.div
+   932→              className="flex gap-3"
+   933→              initial={{ opacity: 0, y: 10 }}
+   934→              animate={{ opacity: 1, y: 0 }}
+   935→            >
+   936→              <div className="w-8 h-8 rounded-lg bg-[oklch(0.65_0.22_240/15)] flex items-center justify-center shrink-0">
+   937→                <Bot size={14} className="text-[oklch(0.65_0.22_240)]" />
+   938→              </div>
+   939→              <div className="glass border-border/50 px-4 py-3 rounded-2xl rounded-tl-md flex items-center gap-1.5">
+   940→                <span className="typing-dot w-2 h-2 rounded-full bg-[oklch(0.65_0.22_240)]" />
+   941→                <span className="typing-dot w-2 h-2 rounded-full bg-[oklch(0.65_0.22_240)]" />
+   942→                <span className="typing-dot w-2 h-2 rounded-full bg-[oklch(0.65_0.22_240)]" />
+   943→              </div>
+   944→            </motion.div>
+   945→          )}
+   946→        </div>
+   947→      </div>
+   948→
+   949→      {/* Input area */}
+   950→      <div className="border-t border-border/50 p-4 md:px-8">
+   951→        <div className="max-w-3xl mx-auto">
+   952→          <div className="glass border-border/50 rounded-2xl p-1.5 focus-within:border-[oklch(0.65_0.22_240/30)] transition-colors">
+   953→            <div className="flex items-end gap-2 px-3 py-2">
+   954→              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleFileAttach}>
+   955→                <Paperclip size={16} className="text-muted-foreground" />
+   956→              </Button>
+   957→              {/* Hidden file input */}
+   958→              <input
+   959→                ref={fileInputRef}
+   960→                type="file"
+   961→                className="hidden"
+   962→                onChange={handleFileChange}
+   963→              />
+   964→              <textarea
+   965→                value={input}
+   966→                onChange={(e) => setInput(e.target.value)}
+   967→                onKeyDown={(e) => {
+   968→                  if (e.key === 'Enter' && !e.shiftKey) {
+   969→                    e.preventDefault();
+   970→                    handleSend();
+   971→                  }
+   972→                }}
+   973→                placeholder={voiceNotSupported ? 'Voice input not supported in this browser' : isRecording ? '🔴 Listening... speak now' : 'Ask about any cricket topic...'}
+   974→                className="flex-1 bg-transparent text-sm resize-none outline-none min-h-[32px] max-h-32 placeholder:text-muted-foreground"
+   975→                rows={1}
+   976→              />
+   977→              <Button
+   978→                variant="ghost"
+   979→                size="icon"
+   980→                className="h-8 w-8 shrink-0 relative"
+   981→                onClick={handleMicToggle}
+   982→              >
+   983→                {isRecording && (
+   984→                  <span className="absolute inset-0 rounded-full bg-red-500/20 animate-pulse" />
+   985→                )}
+   986→                <Mic
+   987→                  size={16}
+   988→                  className={isRecording ? 'text-red-500' : 'text-muted-foreground'}
+   989→                />
+   990→              </Button>
+   991→              <Button
+   992→                size="icon"
+   993→                className="h-8 w-8 shrink-0 bg-[oklch(0.65_0.22_240)] hover:bg-[oklch(0.58_0.24_240)] text-white disabled:opacity-30"
+   994→                disabled={!input.trim()}
+   995→                onClick={() => handleSend()}
+   996→              >
+   997→                <Send size={14} />
+   998→              </Button>
+   999→            </div>
+  1000→          </div>
+  1001→          <p className="text-[10px] text-muted-foreground text-center mt-2">
+  1002→            CricIQ AI may produce inaccurate information. Verify important facts with official sources.
+  1003→          </p>
+  1004→        </div>
+  1005→      </div>
+  1006→    </div>
+  1007→  );
+  1008→}

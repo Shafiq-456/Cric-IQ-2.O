@@ -1,0 +1,660 @@
+     1→'use client';
+     2→
+     3→import { motion, AnimatePresence } from 'framer-motion';
+     4→import { useAppStore, type AppView } from '@/store/useAppStore';
+     5→import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+     6→import {
+     7→  LayoutDashboard, MessageSquare, BarChart3, Users, Trophy,
+     8→  GitCompareArrows, Settings, Search, Sparkles,
+     9→  Bell, LogOut, PanelLeftClose, PanelLeft, Menu,
+    10→  Zap, TrendingUp, ArrowRight, Clock,
+    11→} from 'lucide-react';
+    12→import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+    13→import { Input } from '@/components/ui/input';
+    14→import { Button } from '@/components/ui/button';
+    15→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { cn } from '@/lib/utils';
+    18→import { players, matches, recentSearches } from '@/data/mockData';
+    19→
+    20→interface NavItem {
+    21→  icon: typeof LayoutDashboard;
+    22→  label: string;
+    23→  view: AppView;
+    24→  badge?: string;
+    25→}
+    26→
+    27→const navItems: NavItem[] = [
+    28→  { icon: LayoutDashboard, label: 'Dashboard', view: 'dashboard' },
+    29→  { icon: MessageSquare, label: 'AI Chat', view: 'chat', badge: 'AI' },
+    30→  { icon: BarChart3, label: 'Analytics', view: 'analytics' },
+    31→  { icon: Users, label: 'Players', view: 'players' },
+    32→  { icon: Trophy, label: 'Matches', view: 'matches' },
+    33→  { icon: GitCompareArrows, label: 'Compare', view: 'compare' },
+    34→  { icon: Settings, label: 'Settings', view: 'settings' },
+    35→];
+    36→
+    37→const notificationItems = [
+    38→  { id: 1, icon: Zap, title: 'Live match alert: England vs Pakistan', time: '2m ago', unread: true, color: 'text-[oklch(0.72_0.18_55)]' },
+    39→  { id: 2, icon: Trophy, title: 'India won by 44 runs — Kohli MOTM', time: '1h ago', unread: true, color: 'text-[oklch(0.78_0.16_85)]' },
+    40→  { id: 3, icon: Users, title: 'New player added: Rashid Khan profile updated', time: '3h ago', unread: true, color: 'text-[oklch(0.65_0.20_155)]' },
+    41→  { id: 4, icon: TrendingUp, title: 'Steve Smith rises to ICC rank #6', time: 'Yesterday', unread: false, color: 'text-[oklch(0.72_0.18_30)]' },
+    42→];
+    43→
+    44→export default function AppShell({ children }: { children: React.ReactNode }) {
+    45→  const { view, setView, sidebarOpen, setSidebarOpen, user, searchQuery, setSearchQuery, commandOpen, setCommandOpen } = useAppStore();
+    46→  const { logout: firebaseLogout } = useFirebaseAuth();
+    47→
+    48→  const handleLogout = useCallback(async () => {
+    49→    await firebaseLogout();
+    50→  }, [firebaseLogout]);
+    51→  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+    52→  const [showNotifications, setShowNotifications] = useState(false);
+    53→  const [notificationsUnread, setNotificationsUnread] = useState(true);
+    54→  const markNotificationsRead = useCallback(() => setNotificationsUnread(false), [setNotificationsUnread]);
+    55→  const [commandQuery, setCommandQuery] = useState('');
+    56→  const bellRef = useRef<HTMLDivElement>(null);
+    57→  const commandInputRef = useRef<HTMLInputElement>(null);
+    58→
+    59→  // Close notifications on outside click
+    60→  useEffect(() => {
+    61→    function handleClickOutside(e: MouseEvent) {
+    62→      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+    63→        setShowNotifications(false);
+    64→      }
+    65→    }
+    66→    if (showNotifications) {
+    67→      document.addEventListener('mousedown', handleClickOutside);
+    68→    }
+    69→    return () => document.removeEventListener('mousedown', handleClickOutside);
+    70→  }, [showNotifications]);
+    71→
+    72→
+    73→
+    74→  // ⌘K / Ctrl+K keyboard listener
+    75→  useEffect(() => {
+    76→    function handleKeyDown(e: KeyboardEvent) {
+    77→      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    78→        e.preventDefault();
+    79→        setCommandOpen(!commandOpen);
+    80→        if (commandOpen) setCommandQuery('');
+    81→      }
+    82→    }
+    83→    document.addEventListener('keydown', handleKeyDown);
+    84→    return () => document.removeEventListener('keydown', handleKeyDown);
+    85→  }, [commandOpen, setCommandOpen]);
+    86→
+    87→  // Auto-focus command input when opened
+    88→  useEffect(() => {
+    89→    if (commandOpen) {
+    90→      // Small delay to allow animation to start
+    91→      const timer = setTimeout(() => {
+    92→        commandInputRef.current?.focus();
+    93→      }, 100);
+    94→      return () => clearTimeout(timer);
+    95→    }
+    96→  }, [commandOpen]);
+    97→
+    98→
+    99→
+   100→  // Close command palette on Escape
+   101→  const closeCommandPalette = useCallback(() => {
+   102→    setCommandOpen(false);
+   103→    setCommandQuery('');
+   104→  }, [setCommandOpen]);
+   105→
+   106→  const handleCommandKeyDown = useCallback((e: React.KeyboardEvent) => {
+   107→    if (e.key === 'Escape') {
+   108→      closeCommandPalette();
+   109→    }
+   110→  }, [closeCommandPalette]);
+   111→
+   112→  // Filtered results for command palette
+   113→  const commandResults = useMemo(() => {
+   114→    const q = commandQuery.toLowerCase().trim();
+   115→    const results: { type: 'nav' | 'player' | 'match' | 'recent'; label: string; sublabel?: string; action: () => void }[] = [];
+   116→
+   117→    // Nav items — always shown
+   118→    for (const item of navItems) {
+   119→      if (!q || item.label.toLowerCase().includes(q)) {
+   120→        results.push({
+   121→          type: 'nav',
+   122→          label: item.label,
+   123→          action: () => { setView(item.view); setCommandOpen(false); },
+   124→        });
+   125→      }
+   126→    }
+   127→
+   128→    // Players matching query
+   129→    if (q) {
+   130→      for (const p of players) {
+   131→        if (
+   132→          p.name.toLowerCase().includes(q) ||
+   133→          p.country.toLowerCase().includes(q) ||
+   134→          p.role.toLowerCase().includes(q)
+   135→        ) {
+   136→          results.push({
+   137→            type: 'player',
+   138→            label: p.name,
+   139→            sublabel: `${p.country} · ${p.role}`,
+   140→            action: () => { setView('players'); setCommandOpen(false); },
+   141→          });
+   142→        }
+   143→      }
+   144→    }
+   145→
+   146→    // Matches matching query
+   147→    if (q) {
+   148→      for (const m of matches) {
+   149→        if (
+   150→          m.teamA.toLowerCase().includes(q) ||
+   151→          m.teamB.toLowerCase().includes(q) ||
+   152→          m.competition.toLowerCase().includes(q) ||
+   153→          m.venue.toLowerCase().includes(q)
+   154→        ) {
+   155→          results.push({
+   156→            type: 'match',
+   157→            label: `${m.flagA} ${m.teamA} vs ${m.flagB} ${m.teamB}`,
+   158→            sublabel: m.competition,
+   159→            action: () => { setView('matches'); setCommandOpen(false); },
+   160→          });
+   161→        }
+   162→      }
+   163→    }
+   164→
+   165→    // Recent searches matching query
+   166→    if (q) {
+   167→      for (const rs of recentSearches) {
+   168→        if (rs.toLowerCase().includes(q)) {
+   169→          results.push({
+   170→            type: 'recent',
+   171→            label: rs,
+   172→            action: () => {
+   173→              setSearchQuery(rs);
+   174→              setView('chat');
+   175→              setCommandOpen(false);
+   176→            },
+   177→          });
+   178→        }
+   179→      }
+   180→    }
+   181→
+   182→    return results;
+   183→  }, [commandQuery, setView, setCommandOpen, setSearchQuery]);
+   184→
+   185→  const sidebarContent = (
+   186→    <div className="flex flex-col h-full">
+   187→      {/* Logo */}
+   188→      <div className="p-5 flex items-center justify-between">
+   189→        <div className="flex items-center gap-2.5">
+   190→          <motion.div
+   191→            className="w-8 h-8 rounded-full shrink-0 overflow-hidden"
+   192→            style={{
+   193→              boxShadow: '0 0 14px rgba(212,69,53,0.25)',
+   194→            }}
+   195→            whileHover={{ rotateZ: 360, scale: 1.1 }}
+   196→            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+   197→          >
+   198→            <img src="/cricket-ball.png" alt="" className="w-full h-full object-cover" />
+   199→          </motion.div>
+   200→          {sidebarOpen && (
+   201→            <motion.span
+   202→              initial={{ opacity: 0, x: -10 }}
+   203→              animate={{ opacity: 1, x: 0 }}
+   204→              className="text-lg font-bold tracking-tight"
+   205→            >
+   206→              <span className="gradient-text">Cric</span>
+   207→              <span className="text-foreground">IQ</span>
+   208→            </motion.span>
+   209→          )}
+   210→        </div>
+   211→        <button
+   212→          className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+   213→          onClick={() => setSidebarOpen(!sidebarOpen)}
+   214→        >
+   215→          {sidebarOpen ? <PanelLeftClose size={16} className="text-muted-foreground" /> : <PanelLeft size={16} className="text-muted-foreground" />}
+   216→        </button>
+   217→      </div>
+   218→
+   219→      {/* Nav items */}
+   220→      <nav className="flex-1 px-3 space-y-1">
+   221→        {navItems.map((item) => {
+   222→          const isActive = view === item.view;
+   223→          return (
+   224→            <motion.button
+   225→              key={item.view}
+   226→              onClick={() => { setView(item.view); setShowMobileSidebar(false); }}
+   227→              className={cn(
+   228→                'relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer',
+   229→                isActive
+   230→                  ? 'bg-[oklch(0.65_0.20_155/12%)] text-[oklch(0.65_0.20_155)]'
+   231→                  : 'text-muted-foreground/60 hover:text-foreground/90 hover:bg-muted/30',
+   232→              )}
+   233→              whileHover={{ x: 3, scale: 1.01 }}
+   234→              whileTap={{ scale: 0.98 }}
+   235→              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+   236→            >
+   237→              <item.icon size={18} />
+   238→              {sidebarOpen && (
+   239→                <motion.span
+   240→                  initial={{ opacity: 0, x: -10 }}
+   241→                  animate={{ opacity: 1, x: 0 }}
+   242→                  className="flex-1 text-left"
+   243→                >
+   244→                  {item.label}
+   245→                </motion.span>
+   246→              )}
+   247→              {item.badge && sidebarOpen && (
+   248→                <Badge className="bg-[oklch(0.80_0.15_85/12%)] text-[oklch(0.80_0.15_85)] hover:bg-[oklch(0.80_0.15_85/18%)] text-[10px] px-1.5 py-0 border-0">
+   249→                  {item.badge}
+   250→                </Badge>
+   251→              )}
+   252→              {isActive && (
+   253→                <motion.div
+   254→                  className="absolute left-0 w-[3px] h-6 rounded-r-full bg-[oklch(0.65_0.20_155)]"
+   255→                  layoutId="sidebar-active"
+   256→                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+   257→                />
+   258→              )}
+   259→            </motion.button>
+   260→          );
+   261→        })}
+   262→      </nav>
+   263→
+   264→      {/* User section */}
+   265→      {sidebarOpen && (
+   266→        <motion.div
+   267→          className="p-4 border-t border-border/30"
+   268→          initial={{ opacity: 0, y: 10 }}
+   269→          animate={{ opacity: 1, y: 0 }}
+   270→          transition={{ duration: 0.4 }}
+   271→        >
+   272→          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/30 transition-colors duration-300">
+   273→            <Avatar className="w-9 h-9">
+   274→              <AvatarFallback className="bg-gradient-to-br from-[oklch(0.65_0.20_155/25%)] to-[oklch(0.80_0.15_85/25%)] text-xs font-bold border border-border/20">
+   275→                {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+   276→              </AvatarFallback>
+   277→            </Avatar>
+   278→            <div className="flex-1 min-w-0">
+   279→              <p className="text-sm font-medium truncate">{user?.name}</p>
+   280→              <p className="text-[10px] text-muted-foreground/50 truncate">{user?.email}</p>
+   281→            </div>
+   282→            <button
+   283→              className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors cursor-pointer group"
+   284→              onClick={handleLogout}
+   285→              title="Sign out"
+   286→            >
+   287→              <LogOut size={14} className="text-muted-foreground/50 group-hover:text-destructive transition-colors" />
+   288→            </button>
+   289→          </div>
+   290→        </motion.div>
+   291→      )}
+   292→    </div>
+   293→  );
+   294→
+   295→  return (
+   296→    <div className="h-screen flex overflow-hidden bg-background">
+   297→      {/* Desktop sidebar */}
+   298→      <motion.aside
+   299→        className="hidden lg:block relative border-r border-border/30"
+   300→        style={{ background: 'oklch(0.06 0.012 265)' }}
+   301→        animate={{ width: sidebarOpen ? 260 : 72 }}
+   302→        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+   303→      >
+   304→        <div className="h-full overflow-hidden">{sidebarContent}</div>
+   305→      </motion.aside>
+   306→
+   307→      {/* Mobile sidebar overlay */}
+   308→      <AnimatePresence>
+   309→        {showMobileSidebar && (
+   310→          <>
+   311→            <motion.div
+   312→              className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xl lg:hidden"
+   313→              initial={{ opacity: 0 }}
+   314→              animate={{ opacity: 1 }}
+   315→              exit={{ opacity: 0 }}
+   316→              transition={{ duration: 0.3 }}
+   317→              onClick={() => setShowMobileSidebar(false)}
+   318→            />
+   319→            <motion.aside
+   320→              className="fixed left-0 top-0 bottom-0 z-50 w-64 border-r border-border/30 lg:hidden"
+   321→              style={{ background: 'oklch(0.06 0.012 265 / 98%)', backdropFilter: 'blur(24px)' }}
+   322→              initial={{ x: -256, opacity: 0 }}
+   323→              animate={{ x: 0, opacity: 1 }}
+   324→              exit={{ x: -256, opacity: 0 }}
+   325→              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+   326→            >
+   327→              {sidebarContent}
+   328→            </motion.aside>
+   329→          </>
+   330→        )}
+   331→      </AnimatePresence>
+   332→
+   333→      {/* Main content area */}
+   334→      <div className="flex-1 flex flex-col min-w-0">
+   335→        {/* Top bar */}
+   336→        <header className="h-14 border-b border-border/30 flex items-center gap-4 px-4 md:px-6 glass-strong shrink-0 z-30">
+   337→          <button
+   338→            className="lg:hidden p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+   339→            onClick={() => setShowMobileSidebar(true)}
+   340→          >
+   341→            <Menu size={18} className="text-muted-foreground" />
+   342→          </button>
+   343→
+   344→          {/* Search */}
+   345→          <div className="flex-1 max-w-md">
+   346→            <div className="relative">
+   347→              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+   348→              <Input
+   349→                placeholder="Search players, matches, ask AI..."
+   350→                className="pl-9 h-9 bg-muted/30 border-border/30 text-sm focus:border-[oklch(0.65_0.20_155/30%)] focus:bg-muted/50 transition-all duration-300"
+   351→                value={searchQuery}
+   352→                onChange={(e) => setSearchQuery(e.target.value)}
+   353→              />
+   354→              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/40 bg-muted/50 px-1.5 py-0.5 rounded border border-border/30">
+   355→                ⌘K
+   356→              </kbd>
+   357→            </div>
+   358→          </div>
+   359→
+   360→          <div className="flex items-center gap-2">
+   361→            {/* Sparkles — navigate to AI Chat */}
+   362→            <motion.div whileHover={{ scale: 1.1, rotate: 15 }} whileTap={{ scale: 0.9 }}>
+   363→              <Button
+   364→                variant="ghost"
+   365→                size="icon"
+   366→                className="h-9 w-9 relative cursor-pointer"
+   367→                onClick={() => setView('chat')}
+   368→              >
+   369→                <Sparkles size={16} className="text-[oklch(0.80_0.15_85)]" />
+   370→              </Button>
+   371→            </motion.div>
+   372→
+   373→            {/* Bell — notifications dropdown */}
+   374→            <div ref={bellRef} className="relative">
+   375→              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+   376→                <Button
+   377→                  variant="ghost"
+   378→                  size="icon"
+   379→                  className="h-9 w-9 relative cursor-pointer"
+   380→                  onClick={() => {
+   381→                  setShowNotifications(!showNotifications);
+   382→                  if (!showNotifications) markNotificationsRead();
+   383→                }}
+   384→                >
+   385→                  <Bell size={16} className="text-muted-foreground/60" />
+   386→                  {notificationsUnread && (
+   387→                    <span
+   388→                      className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[oklch(0.65_0.20_155)]"
+   389→                      style={{ boxShadow: '0 0 6px oklch(0.65 0.20 155 / 50%)' }}
+   390→                    />
+   391→                  )}
+   392→                </Button>
+   393→              </motion.div>
+   394→
+   395→              {/* Notifications dropdown */}
+   396→              <AnimatePresence>
+   397→                {showNotifications && (
+   398→                  <motion.div
+   399→                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+   400→                    animate={{ opacity: 1, y: 0, scale: 1 }}
+   401→                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+   402→                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+   403→                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border border-border/40 overflow-hidden glass-strong shadow-2xl shadow-black/40 z-50"
+   404→                  >
+   405→                    {/* Header */}
+   406→                    <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
+   407→                      <h3 className="text-sm font-semibold">Notifications</h3>
+   408→                      <button
+   409→                        className="text-xs text-[oklch(0.65_0.20_155)] hover:text-[oklch(0.55_0.22_155)] transition-colors cursor-pointer font-medium"
+   410→                        onClick={markNotificationsRead}
+   411→                      >
+   412→                        Mark all read
+   413→                      </button>
+   414→                    </div>
+   415→
+   416→                    {/* Notification items */}
+   417→                    <div className="max-h-80 overflow-y-auto no-scrollbar">
+   418→                      {notificationItems.map((notif) => (
+   419→                        <div
+   420→                          key={notif.id}
+   421→                          className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/15 last:border-b-0"
+   422→                        >
+   423→                          <div className={cn('mt-0.5 shrink-0', notif.color)}>
+   424→                            <notif.icon size={16} />
+   425→                          </div>
+   426→                          <div className="flex-1 min-w-0">
+   427→                            <p className="text-sm leading-snug text-foreground/90">{notif.title}</p>
+   428→                            <p className="text-[11px] text-muted-foreground/50 mt-0.5">{notif.time}</p>
+   429→                          </div>
+   430→                          {notif.unread && notificationsUnread && (
+   431→                            <span className="mt-2 shrink-0 w-2 h-2 rounded-full bg-[oklch(0.65_0.20_155)]" />
+   432→                          )}
+   433→                        </div>
+   434→                      ))}
+   435→                    </div>
+   436→
+   437→                    {/* Footer */}
+   438→                    <div className="border-t border-border/30 px-4 py-2.5">
+   439→                      <button
+   440→                        className="flex items-center gap-1.5 text-xs font-medium text-[oklch(0.65_0.20_155)] hover:text-[oklch(0.55_0.22_155)] transition-colors cursor-pointer mx-auto"
+   441→                        onClick={() => setShowNotifications(false)}
+   442→                      >
+   443→                        View All
+   444→                        <ArrowRight size={12} />
+   445→                      </button>
+   446→                    </div>
+   447→                  </motion.div>
+   448→                )}
+   449→              </AnimatePresence>
+   450→            </div>
+   451→          </div>
+   452→        </header>
+   453→
+   454→        {/* Page content with 3D transitions */}
+   455→        <main className="flex-1 overflow-y-auto no-scrollbar perspective-subtle">
+   456→          <AnimatePresence mode="wait">
+   457→            <motion.div
+   458→              key={view}
+   459→              initial={{
+   460→                opacity: 0,
+   461→                y: 20,
+   462→                rotateX: 4,
+   463→                translateZ: -30,
+   464→                scale: 0.98,
+   465→                filter: 'blur(6px)',
+   466→              }}
+   467→              animate={{
+   468→                opacity: 1,
+   469→                y: 0,
+   470→                rotateX: 0,
+   471→                translateZ: 0,
+   472→                scale: 1,
+   473→                filter: 'blur(0px)',
+   474→              }}
+   475→              exit={{
+   476→                opacity: 0,
+   477→                y: -15,
+   478→                rotateX: -2,
+   479→                translateZ: -20,
+   480→                scale: 0.99,
+   481→                filter: 'blur(4px)',
+   482→              }}
+   483→              transition={{
+   484→                duration: 0.4,
+   485→                ease: [0.16, 1, 0.3, 1],
+   486→              }}
+   487→              className="h-full preserve-3d"
+   488→            >
+   489→              {children}
+   490→            </motion.div>
+   491→          </AnimatePresence>
+   492→        </main>
+   493→      </div>
+   494→
+   495→      {/* Command Palette Overlay */}
+   496→      <AnimatePresence>
+   497→        {commandOpen && (
+   498→          <motion.div
+   499→            className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
+   500→            initial={{ opacity: 0 }}
+   501→            animate={{ opacity: 1 }}
+   502→            exit={{ opacity: 0 }}
+   503→            transition={{ duration: 0.2 }}
+   504→            onClick={() => setCommandOpen(false)}
+   505→          >
+   506→            {/* Backdrop */}
+   507→            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+   508→
+   509→            {/* Panel */}
+   510→            <motion.div
+   511→              className="relative w-full max-w-lg mx-4 rounded-2xl border border-border/40 overflow-hidden glass-strong shadow-2xl shadow-black/60"
+   512→              style={{ maxHeight: 'min(480px, 70vh)' }}
+   513→              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+   514→              animate={{ opacity: 1, y: 0, scale: 1 }}
+   515→              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+   516→              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+   517→              onClick={(e) => e.stopPropagation()}
+   518→              onKeyDown={handleCommandKeyDown}
+   519→            >
+   520→              {/* Search input */}
+   521→              <div className="flex items-center gap-3 px-4 border-b border-border/30">
+   522→                <Search size={18} className="text-muted-foreground/50 shrink-0" />
+   523→                <input
+   524→                  ref={commandInputRef}
+   525→                  type="text"
+   526→                  placeholder="Search players, matches, navigate..."
+   527→                  className="flex-1 h-12 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+   528→                  value={commandQuery}
+   529→                  onChange={(e) => setCommandQuery(e.target.value)}
+   530→                />
+   531→                <kbd className="text-[10px] text-muted-foreground/40 bg-muted/50 px-1.5 py-0.5 rounded border border-border/30 shrink-0">
+   532→                  ESC
+   533→                </kbd>
+   534→              </div>
+   535→
+   536→              {/* Results */}
+   537→              <div className="overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(min(480px, 70vh) - 49px)' }}>
+   538→                {commandResults.length === 0 && (
+   539→                  <div className="px-4 py-10 text-center text-sm text-muted-foreground/50">
+   540→                    No results found for &quot;{commandQuery}&quot;
+   541→                  </div>
+   542→                )}
+   543→
+   544→                {commandResults.length > 0 && (
+   545→                  <div className="p-2">
+   546→                    {/* Group: Navigation */}
+   547→                    {commandResults.some((r) => r.type === 'nav') && (
+   548→                      <>
+   549→                        <p className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/40 font-semibold">
+   550→                          Navigation
+   551→                        </p>
+   552→                        {commandResults
+   553→                          .filter((r) => r.type === 'nav')
+   554→                          .map((r, i) => {
+   555→                            const navItem = navItems.find((n) => n.label === r.label);
+   556→                            const Icon = navItem?.icon || LayoutDashboard;
+   557→                            return (
+   558→                              <button
+   559→                                key={`nav-${r.label}`}
+   560→                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left hover:bg-muted/40 transition-colors cursor-pointer group"
+   561→                                onClick={r.action}
+   562→                              >
+   563→                                <Icon size={16} className="text-muted-foreground/50 group-hover:text-[oklch(0.65_0.20_155)] transition-colors shrink-0" />
+   564→                                <span className="text-foreground/80 group-hover:text-foreground transition-colors">
+   565→                                  {r.label}
+   566→                                </span>
+   567→                              </button>
+   568→                            );
+   569→                          })}
+   570→                      </>
+   571→                    )}
+   572→
+   573→                    {/* Group: Players */}
+   574→                    {commandResults.some((r) => r.type === 'player') && (
+   575→                      <>
+   576→                        <p className="px-2 py-1.5 mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/40 font-semibold">
+   577→                          Players
+   578→                        </p>
+   579→                        {commandResults
+   580→                          .filter((r) => r.type === 'player')
+   581→                          .map((r) => (
+   582→                            <button
+   583→                              key={`player-${r.label}`}
+   584→                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left hover:bg-muted/40 transition-colors cursor-pointer group"
+   585→                              onClick={r.action}
+   586→                            >
+   587→                              <Users size={16} className="text-muted-foreground/50 group-hover:text-[oklch(0.65_0.20_155)] transition-colors shrink-0" />
+   588→                              <div className="flex-1 min-w-0">
+   589→                                <span className="text-foreground/80 group-hover:text-foreground transition-colors block truncate">
+   590→                                  {r.label}
+   591→                                </span>
+   592→                                {r.sublabel && (
+   593→                                  <span className="text-[11px] text-muted-foreground/40">{r.sublabel}</span>
+   594→                                )}
+   595→                              </div>
+   596→                            </button>
+   597→                          ))}
+   598→                      </>
+   599→                    )}
+   600→
+   601→                    {/* Group: Matches */}
+   602→                    {commandResults.some((r) => r.type === 'match') && (
+   603→                      <>
+   604→                        <p className="px-2 py-1.5 mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/40 font-semibold">
+   605→                          Matches
+   606→                        </p>
+   607→                        {commandResults
+   608→                          .filter((r) => r.type === 'match')
+   609→                          .map((r) => (
+   610→                            <button
+   611→                              key={`match-${r.label}`}
+   612→                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left hover:bg-muted/40 transition-colors cursor-pointer group"
+   613→                              onClick={r.action}
+   614→                            >
+   615→                              <Trophy size={16} className="text-muted-foreground/50 group-hover:text-[oklch(0.65_0.20_155)] transition-colors shrink-0" />
+   616→                              <div className="flex-1 min-w-0">
+   617→                                <span className="text-foreground/80 group-hover:text-foreground transition-colors block truncate">
+   618→                                  {r.label}
+   619→                                </span>
+   620→                                {r.sublabel && (
+   621→                                  <span className="text-[11px] text-muted-foreground/40">{r.sublabel}</span>
+   622→                                )}
+   623→                              </div>
+   624→                            </button>
+   625→                          ))}
+   626→                      </>
+   627→                    )}
+   628→
+   629→                    {/* Group: Recent Searches */}
+   630→                    {commandResults.some((r) => r.type === 'recent') && (
+   631→                      <>
+   632→                        <p className="px-2 py-1.5 mt-2 text-[10px] uppercase tracking-wider text-muted-foreground/40 font-semibold">
+   633→                          Recent Searches
+   634→                        </p>
+   635→                        {commandResults
+   636→                          .filter((r) => r.type === 'recent')
+   637→                          .map((r) => (
+   638→                            <button
+   639→                              key={`recent-${r.label}`}
+   640→                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left hover:bg-muted/40 transition-colors cursor-pointer group"
+   641→                              onClick={r.action}
+   642→                            >
+   643→                              <Clock size={16} className="text-muted-foreground/50 group-hover:text-[oklch(0.65_0.20_155)] transition-colors shrink-0" />
+   644→                              <span className="text-foreground/80 group-hover:text-foreground transition-colors truncate">
+   645→                                {r.label}
+   646→                              </span>
+   647→                            </button>
+   648→                          ))}
+   649→                      </>
+   650→                    )}
+   651→                  </div>
+   652→                )}
+   653→              </div>
+   654→            </motion.div>
+   655→          </motion.div>
+   656→        )}
+   657→      </AnimatePresence>
+   658→    </div>
+   659→  );
+   660→}

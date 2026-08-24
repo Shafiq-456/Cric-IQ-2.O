@@ -1,0 +1,638 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useRef, useCallback, useEffect } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     6→     6→import { Button } from '@/components/ui/button';
+     7→     7→import { Input } from '@/components/ui/input';
+     8→     8→import { Label } from '@/components/ui/label';
+     9→     9→import { Badge } from '@/components/ui/badge';
+    10→    10→import { Switch } from '@/components/ui/switch';
+    11→    11→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+    12→    12→import { toast } from 'sonner';
+    13→    13→import {
+    14→    14→  User, Bell, Palette, Shield, Database, Key,
+    15→    15→  Moon, Globe, Mail, ChevronRight, Save, Loader2, Upload, Check,
+    16→    16→} from 'lucide-react';
+    17→    17→import { useAppStore } from '@/store/useAppStore';
+    18→    18→import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+    19→    19→
+    20→    20→const LANGUAGES = ['English', 'Hindi', 'Spanish'] as const;
+    21→    21→type Language = (typeof LANGUAGES)[number];
+    22→    22→
+    23→    23→interface NotificationsState {
+    24→    24→  matchStartAlerts: boolean;
+    25→    25→  aiInsightDigest: boolean;
+    26→    26→  playerPerformanceAlerts: boolean;
+    27→    27→  weeklyAnalyticsReport: boolean;
+    28→    28→}
+    29→    29→
+    30→    30→interface SettingsState {
+    31→    31→  darkMode: boolean;
+    32→    32→  language: Language;
+    33→    33→  emailNotifications: boolean;
+    34→    34→  notifications: NotificationsState;
+    35→    35→}
+    36→    36→
+    37→    37→function loadSettings(): SettingsState {
+    38→    38→  if (typeof window === 'undefined') {
+    39→    39→    return {
+    40→    40→      darkMode: true,
+    41→    41→      language: 'English',
+    42→    42→      emailNotifications: true,
+    43→    43→      notifications: {
+    44→    44→        matchStartAlerts: true,
+    45→    45→        aiInsightDigest: true,
+    46→    46→        playerPerformanceAlerts: false,
+    47→    47→        weeklyAnalyticsReport: true,
+    48→    48→      },
+    49→    49→    };
+    50→    50→  }
+    51→    51→  try {
+    52→    52→    const raw = localStorage.getItem('criciq-settings');
+    53→    53→    if (raw) {
+    54→    54→      const parsed = JSON.parse(raw) as Partial<SettingsState>;
+    55→    55→      return {
+    56→    56→        darkMode: parsed.darkMode ?? true,
+    57→    57→        language: parsed.language ?? 'English',
+    58→    58→        emailNotifications: parsed.emailNotifications ?? true,
+    59→    59→        notifications: {
+    60→    60→          matchStartAlerts: parsed.notifications?.matchStartAlerts ?? true,
+    61→    61→          aiInsightDigest: parsed.notifications?.aiInsightDigest ?? true,
+    62→    62→          playerPerformanceAlerts: parsed.notifications?.playerPerformanceAlerts ?? false,
+    63→    63→          weeklyAnalyticsReport: parsed.notifications?.weeklyAnalyticsReport ?? true,
+    64→    64→        },
+    65→    65→      };
+    66→    66→    }
+    67→    67→  } catch {
+    68→    68→    // ignore parse errors
+    69→    69→  }
+    70→    70→  return {
+    71→    71→    darkMode: true,
+    72→    72→    language: 'English',
+    73→    73→    emailNotifications: true,
+    74→    74→    notifications: {
+    75→    75→      matchStartAlerts: true,
+    76→    76→      aiInsightDigest: true,
+    77→    77→      playerPerformanceAlerts: false,
+    78→    78→      weeklyAnalyticsReport: true,
+    79→    79→    },
+    80→    80→  };
+    81→    81→}
+    82→    82→
+    83→    83→function persistSettings(settings: SettingsState) {
+    84→    84→  if (typeof window !== 'undefined') {
+    85→    85→    localStorage.setItem('criciq-settings', JSON.stringify(settings));
+    86→    86→  }
+    87→    87→}
+    88→    88→
+    89→    89→export default function SettingsPage() {
+    90→    90→  const { user, setUser } = useAppStore();
+    91→    91→
+    92→    92→  // --- Profile state ---
+    93→    93→  const [name, setName] = useState(user?.name ?? '');
+    94→    94→  const [email, setEmail] = useState(user?.email ?? '');
+    95→    95→  const [favoriteTeam, setFavoriteTeam] = useState(user?.favoriteTeam ?? '');
+    96→    96→  const [favoritePlayer, setFavoritePlayer] = useState(user?.favoritePlayer ?? '');
+    97→    97→
+    98→    98→  // --- Settings state (persisted to localStorage) ---
+    99→    99→  const [settings, setSettings] = useState<SettingsState>(loadSettings);
+   100→   100→
+   101→   101→  // Persist settings whenever they change
+   102→   102→  useEffect(() => {
+   103→   103→    persistSettings(settings);
+   104→   104→  }, [settings]);
+   105→   105→
+   106→   106→  // --- Knowledge Base state ---
+   107→   107→  const [docCount, setDocCount] = useState(12);
+   108→   108→  const [chunkCount, setChunkCount] = useState(1847);
+   109→   109→  const [storageMB, setStorageMB] = useState(24);
+   110→   110→
+   111→   111→  // --- Security state ---
+   112→   112→  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+   113→   113→  const [oldPassword, setOldPassword] = useState('');
+   114→   114→  const [newPassword, setNewPassword] = useState('');
+   115→   115→  const [confirmPassword, setConfirmPassword] = useState('');
+   116→   116→  const [passwordError, setPasswordError] = useState('');
+   117→   117→  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+   118→   118→
+   119→   119→  // --- Save button state ---
+   120→   120→  const [saving, setSaving] = useState(false);
+   121→   121→
+   122→   122→  // --- File upload ref ---
+   123→   123→  const fileInputRef = useRef<HTMLInputElement>(null);
+   124→   124→
+   125→   125→  // --- Handlers ---
+   126→   126→  const cycleLanguage = useCallback(() => {
+   127→   127→    setSettings((prev) => {
+   128→   128→      const idx = LANGUAGES.indexOf(prev.language);
+   129→   129→      const next = LANGUAGES[(idx + 1) % LANGUAGES.length];
+   130→   130→      return { ...prev, language: next };
+   131→   131→    });
+   132→   132→  });
+   133→   133→
+   134→   134→  const toggleNotification = useCallback((key: keyof NotificationsState) => {
+   135→   135→    setSettings((prev) => ({
+   136→   136→      ...prev,
+   137→   137→      notifications: { ...prev.notifications, [key]: !prev.notifications[key] },
+   138→   138→    }));
+   139→   139→  });
+   140→   140→
+   141→   141→  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+   142→   142→    const file = e.target.files?.[0];
+   143→   143→    if (!file) return;
+   144→   144→    const allowed = ['.pdf', '.csv', '.json', '.docx', '.txt'];
+   145→   145→    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+   146→   146→    if (!allowed.includes(ext)) {
+   147→   147→      toast.error('Unsupported file type. Allowed: PDF, CSV, JSON, DOCX, TXT.');
+   148→   148→      return;
+   149→   149→    }
+   150→   150→    // Simulate upload success
+   151→   151→    setDocCount((c) => c + 1);
+   152→   152→    setChunkCount((c) => c + Math.floor(Math.random() * 200) + 50);
+   153→   153→    setStorageMB((c) => c + Math.floor(Math.random() * 5) + 1);
+   154→   154→    toast.success(`"${file.name}" uploaded successfully.`);
+   155→   155→    // Reset the input so the same file can be re-uploaded
+   156→   156→    e.target.value = '';
+   157→   157→  });
+   158→   158→
+   159→   159→  const handlePasswordChange = useCallback(() => {
+   160→   160→    setPasswordError('');
+   161→   161→    if (!oldPassword.trim()) {
+   162→   162→      setPasswordError('Please enter your current password.');
+   163→   163→      return;
+   164→   164→    }
+   165→   165→    if (!newPassword.trim()) {
+   166→   166→      setPasswordError('Please enter a new password.');
+   167→   167→      return;
+   168→   168→    }
+   169→   169→    if (newPassword.length < 6) {
+   170→   170→      setPasswordError('New password must be at least 6 characters.');
+   171→   171→      return;
+   172→   172→    }
+   173→   173→    if (newPassword !== confirmPassword) {
+   174→   174→      setPasswordError('New passwords do not match.');
+   175→   175→      return;
+   176→   176→    }
+   177→   177→    // Simulate password change
+   178→   178→    toast.success('Password changed successfully.');
+   179→   179→    setPasswordDialogOpen(false);
+   180→   180→    setOldPassword('');
+   181→   181→    setNewPassword('');
+   182→   182→    setConfirmPassword('');
+   183→   183→    setPasswordError('');
+   184→   184→  });
+   185→   185→
+   186→   186→  const handleTwoFactorToggle = useCallback(() => {
+   187→   187→    setTwoFactorEnabled((prev) => {
+   188→   188→      const next = !prev;
+   189→   189→      toast.success(next ? 'Two-Factor Authentication enabled.' : 'Two-Factor Authentication disabled.');
+   190→   190→      return next;
+   191→   191→    });
+   192→   192→  });
+   193→   193→
+   194→   194→  const handleSave = useCallback(() => {
+   195→   195→    setSaving(true);
+   196→   196→    // Update user in store (this also syncs with Firebase context via page.tsx)
+   197→   197→    setUser({
+   198→   198→      name,
+   199→   199→      email,
+   200→   200→      favoriteTeam,
+   201→   201→      favoritePlayer,
+   202→   202→      image: user?.image,
+   203→   203→    });
+   204→   204→    // Persist user profile to localStorage for session restore
+   205→   205→    if (typeof window !== 'undefined') {
+   206→   206→      try {
+   207→   207→        localStorage.setItem('criciq-auth', JSON.stringify({
+   208→   208→          name,
+   209→   209→          email,
+   210→   210→          favoriteTeam,
+   211→   211→          favoritePlayer,
+   212→   212→          image: user?.image,
+   213→   213→        }));
+   214→   214→      } catch {
+   215→   215→        // ignore
+   216→   216→      }
+   217→   217→    }
+   218→   218→    // Persist settings (already done via useEffect, but be explicit)
+   219→   219→    persistSettings(settings);
+   220→   220→    // Brief loading state
+   221→   221→    setTimeout(() => {
+   222→   222→      setSaving(false);
+   223→   223→      toast.success('Settings saved successfully.');
+   224→   224→    }, 500);
+   225→   225→  });
+   226→   226→
+   227→   227→  // Derived display values
+   228→   228→  const initials = name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
+   229→   229→  const chunkDisplay = chunkCount.toLocaleString();
+   230→   230→
+   231→   231→  return (
+   232→   232→    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-3xl">
+   233→   233→      {/* Header */}
+   234→   234→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   235→   235→        <h1 className="text-2xl md:text-3xl font-bold mb-1">Settings</h1>
+   236→   236→        <p className="text-sm text-muted-foreground">Manage your profile, preferences, and account settings.</p>
+   237→   237→      </motion.div>
+   238→   238→
+   239→   239→      <div className="space-y-6">
+   240→   240→        {/* ───── Profile ───── */}
+   241→   241→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
+   242→   242→          <Card className="glass border-border/50">
+   243→   243→            <CardHeader className="pb-3">
+   244→   244→              <div className="flex items-center gap-2">
+   245→   245→                <User size={16} className="text-[oklch(0.65_0.22_240)]" />
+   246→   246→                <CardTitle className="text-sm font-medium">Profile</CardTitle>
+   247→   247→              </div>
+   248→   248→            </CardHeader>
+   249→   249→            <CardContent>
+   250→   250→              <div className="space-y-4">
+   251→   251→                <div className="flex items-center gap-4 mb-4">
+   252→   252→                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[oklch(0.65_0.22_240/30)] to-[oklch(0.78_0.16_85/30)] flex items-center justify-center text-xl font-bold">
+   253→   253→                    {initials}
+   254→   254→                  </div>
+   255→   255→                  <div>
+   256→   256→                    <p className="font-semibold">{name || 'Unnamed User'}</p>
+   257→   257→                    <p className="text-sm text-muted-foreground">{email || 'No email set'}</p>
+   258→   258→                    <Badge variant="outline" className="text-[10px] mt-1">Pro Plan</Badge>
+   259→   259→                  </div>
+   260→   260→                </div>
+   261→   261→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   262→   262→                  <div className="space-y-1.5">
+   263→   263→                    <Label className="text-xs">Full Name</Label>
+   264→   264→                    <Input
+   265→   265→                      value={name}
+   266→   266→                      onChange={(e) => setName(e.target.value)}
+   267→   267→                      className="bg-muted/50 border-border/50 text-sm"
+   268→   268→                    />
+   269→   269→                  </div>
+   270→   270→                  <div className="space-y-1.5">
+   271→   271→                    <Label className="text-xs">Email</Label>
+   272→   272→                    <Input
+   273→   273→                      value={email}
+   274→   274→                      onChange={(e) => setEmail(e.target.value)}
+   275→   275→                      className="bg-muted/50 border-border/50 text-sm"
+   276→   276→                    />
+   277→   277→                  </div>
+   278→   278→                  <div className="space-y-1.5">
+   279→   279→                    <Label className="text-xs">Favorite Team</Label>
+   280→   280→                    <Input
+   281→   281→                      value={favoriteTeam}
+   282→   282→                      onChange={(e) => setFavoriteTeam(e.target.value)}
+   283→   283→                      className="bg-muted/50 border-border/50 text-sm"
+   284→   284→                    />
+   285→   285→                  </div>
+   286→   286→                  <div className="space-y-1.5">
+   287→   287→                    <Label className="text-xs">Favorite Player</Label>
+   288→   288→                    <Input
+   289→   289→                      value={favoritePlayer}
+   290→   290→                      onChange={(e) => setFavoritePlayer(e.target.value)}
+   291→   291→                      className="bg-muted/50 border-border/50 text-sm"
+   292→   292→                    />
+   293→   293→                  </div>
+   294→   294→                </div>
+   295→   295→              </div>
+   296→   296→            </CardContent>
+   297→   297→          </Card>
+   298→   298→        </motion.div>
+   299→   299→
+   300→   300→        {/* ───── Preferences ───── */}
+   301→   301→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+   302→   302→          <Card className="glass border-border/50">
+   303→   303→            <CardHeader className="pb-3">
+   304→   304→              <div className="flex items-center gap-2">
+   305→   305→                <Palette size={16} className="text-[oklch(0.65_0.22_240)]" />
+   306→   306→                <CardTitle className="text-sm font-medium">Preferences</CardTitle>
+   307→   307→              </div>
+   308→   308→            </CardHeader>
+   309→   309→            <CardContent>
+   310→   310→              <div className="space-y-4">
+   311→   311→                {/* Dark Mode */}
+   312→   312→                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+   313→   313→                  <div className="flex items-center gap-3">
+   314→   314→                    <Moon size={16} className="text-[oklch(0.65_0.22_240)]" />
+   315→   315→                    <div>
+   316→   316→                      <p className="text-sm font-medium">Dark Mode</p>
+   317→   317→                      <p className="text-[10px] text-muted-foreground">Use dark theme across the app</p>
+   318→   318→                    </div>
+   319→   319→                  </div>
+   320→   320→                  <Switch
+   321→   321→                    checked={settings.darkMode}
+   322→   322→                    onCheckedChange={(checked) =>
+   323→   323→                      setSettings((prev) => ({ ...prev, darkMode: checked }))
+   324→   324→                    }
+   325→   325→                  />
+   326→   326→                </div>
+   327→   327→
+   328→   328→                {/* Language */}
+   329→   329→                <div
+   330→   330→                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 cursor-pointer hover:bg-muted/70 transition-colors"
+   331→   331→                  onClick={cycleLanguage}
+   332→   332→                  role="button"
+   333→   333→                  tabIndex={0}
+   334→   334→                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleLanguage(); } }}
+   335→   335→                  aria-label={`Current language: ${settings.language}. Click to change.`}
+   336→   336→                >
+   337→   337→                  <div className="flex items-center gap-3">
+   338→   338→                    <Globe size={16} className="text-[oklch(0.72_0.18_170)]" />
+   339→   339→                    <div>
+   340→   340→                      <p className="text-sm font-medium">Language</p>
+   341→   341→                      <p className="text-[10px] text-muted-foreground">Set your preferred language</p>
+   342→   342→                    </div>
+   343→   343→                  </div>
+   344→   344→                  <div className="flex items-center gap-2">
+   345→   345→                    <Badge className="bg-[oklch(0.72_0.18_170/15)] text-[oklch(0.72_0.18_170)] text-[10px]">
+   346→   346→                      {settings.language}
+   347→   347→                    </Badge>
+   348→   348→                    <ChevronRight size={14} className="text-muted-foreground" />
+   349→   349→                  </div>
+   350→   350→                </div>
+   351→   351→
+   352→   352→                {/* Email Notifications */}
+   353→   353→                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+   354→   354→                  <div className="flex items-center gap-3">
+   355→   355→                    <Mail size={16} className="text-[oklch(0.78_0.16_85)]" />
+   356→   356→                    <div>
+   357→   357→                      <p className="text-sm font-medium">Email Notifications</p>
+   358→   358→                      <p className="text-[10px] text-muted-foreground">Match alerts, AI insights, weekly digest</p>
+   359→   359→                    </div>
+   360→   360→                  </div>
+   361→   361→                  <Switch
+   362→   362→                    checked={settings.emailNotifications}
+   363→   363→                    onCheckedChange={(checked) =>
+   364→   364→                      setSettings((prev) => ({ ...prev, emailNotifications: checked }))
+   365→   365→                    }
+   366→   366→                  />
+   367→   367→                </div>
+   368→   368→              </div>
+   369→   369→            </CardContent>
+   370→   370→          </Card>
+   371→   371→        </motion.div>
+   372→   372→
+   373→   373→        {/* ───── Notifications ───── */}
+   374→   374→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+   375→   375→          <Card className="glass border-border/50">
+   376→   376→            <CardHeader className="pb-3">
+   377→   377→              <div className="flex items-center gap-2">
+   378→   378→                <Bell size={16} className="text-[oklch(0.65_0.22_240)]" />
+   379→   379→                <CardTitle className="text-sm font-medium">Notifications</CardTitle>
+   380→   380→              </div>
+   381→   381→            </CardHeader>
+   382→   382→            <CardContent>
+   383→   383→              <div className="space-y-3">
+   384→   384→                {([
+   385→   385→                  { key: 'matchStartAlerts' as const, label: 'Match Start Alerts', desc: 'Get notified when a match begins' },
+   386→   386→                  { key: 'aiInsightDigest' as const, label: 'AI Insight Digest', desc: 'Daily AI-generated cricket insights' },
+   387→   387→                  { key: 'playerPerformanceAlerts' as const, label: 'Player Performance Alerts', desc: 'Notifications for tracked players' },
+   388→   388→                  { key: 'weeklyAnalyticsReport' as const, label: 'Weekly Analytics Report', desc: 'Summary of weekly cricket statistics' },
+   389→   389→                ]).map((n) => (
+   390→   390→                  <div
+   391→   391→                    key={n.key}
+   392→   392→                    className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-colors"
+   393→   393→                  >
+   394→   394→                    <div>
+   395→   395→                      <p className="text-sm font-medium">{n.label}</p>
+   396→   396→                      <p className="text-[10px] text-muted-foreground">{n.desc}</p>
+   397→   397→                    </div>
+   398→   398→                    <AnimatePresence mode="wait">
+   399→   399→                      <motion.div
+   400→   400→                        key={settings.notifications[n.key] ? 'on' : 'off'}
+   401→   401→                        initial={{ scale: 0.8, opacity: 0 }}
+   402→   402→                        animate={{ scale: 1, opacity: 1 }}
+   403→   403→                        exit={{ scale: 0.8, opacity: 0 }}
+   404→   404→                        transition={{ duration: 0.15 }}
+   405→   405→                      >
+   406→   406→                        <Switch
+   407→   407→                          checked={settings.notifications[n.key]}
+   408→   408→                          onCheckedChange={() => toggleNotification(n.key)}
+   409→   409→                        />
+   410→   410→                      </motion.div>
+   411→   411→                    </AnimatePresence>
+   412→   412→                  </div>
+   413→   413→                ))}
+   414→   414→              </div>
+   415→   415→            </CardContent>
+   416→   416→          </Card>
+   417→   417→        </motion.div>
+   418→   418→
+   419→   419→        {/* ───── Knowledge Base ───── */}
+   420→   420→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+   421→   421→          <Card className="glass border-border/50">
+   422→   422→            <CardHeader className="pb-3">
+   423→   423→              <div className="flex items-center gap-2">
+   424→   424→                <Database size={16} className="text-[oklch(0.65_0.22_240)]" />
+   425→   425→                <CardTitle className="text-sm font-medium">Knowledge Base</CardTitle>
+   426→   426→              </div>
+   427→   427→            </CardHeader>
+   428→   428→            <CardContent>
+   429→   429→              <div className="space-y-4">
+   430→   430→                <p className="text-sm text-muted-foreground">
+   431→   431→                  Manage your uploaded documents and private knowledge base for AI queries.
+   432→   432→                </p>
+   433→   433→                <div className="grid grid-cols-3 gap-3">
+   434→   434→                  {([
+   435→   435→                    { label: 'Documents', value: String(docCount), color: 'oklch(0.65 0.22 240)' },
+   436→   436→                    { label: 'Chunks', value: chunkDisplay, color: 'oklch(0.78 0.16 85)' },
+   437→   437→                    { label: 'Storage', value: `${storageMB} MB`, color: 'oklch(0.72 0.18 170)' },
+   438→   438→                  ]).map((s) => (
+   439→   439→                    <motion.div
+   440→   440→                      key={s.label}
+   441→   441→                      className="p-3 rounded-xl bg-muted/50 text-center"
+   442→   442→                      initial={false}
+   443→   443→                      animate={{ scale: [1, 1.05, 1] }}
+   444→   444→                      transition={{ duration: 0.3 }}
+   445→   445→                    >
+   446→   446→                      <p className="text-lg font-bold" style={{ color: s.color }}>{s.value}</p>
+   447→   447→                      <p className="text-[10px] text-muted-foreground">{s.label}</p>
+   448→   448→                    </motion.div>
+   449→   449→                  ))}
+   450→   450→                </div>
+   451→   451→                <input
+   452→   452→                  ref={fileInputRef}
+   453→   453→                  type="file"
+   454→   454→                  accept=".pdf,.csv,.json,.docx,.txt"
+   455→   455→                  className="hidden"
+   456→   456→                  onChange={handleFileUpload}
+   457→   457→                />
+   458→   458→                <Button
+   459→   459→                  variant="outline"
+   460→   460→                  className="w-full border-border/50 border-dashed"
+   461→   461→                  onClick={() => fileInputRef.current?.click()}
+   462→   462→                >
+   463→   463→                  <Upload size={14} className="mr-2" />
+   464→   464→                  Upload New Document
+   465→   465→                </Button>
+   466→   466→              </div>
+   467→   467→            </CardContent>
+   468→   468→          </Card>
+   469→   469→        </motion.div>
+   470→   470→
+   471→   471→        {/* ───── Security ───── */}
+   472→   472→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+   473→   473→          <Card className="glass border-border/50">
+   474→   474→            <CardHeader className="pb-3">
+   475→   475→              <div className="flex items-center gap-2">
+   476→   476→                <Shield size={16} className="text-[oklch(0.65_0.22_240)]" />
+   477→   477→                <CardTitle className="text-sm font-medium">Security</CardTitle>
+   478→   478→              </div>
+   479→   479→            </CardHeader>
+   480→   480→            <CardContent>
+   481→   481→              <div className="space-y-3">
+   482→   482→                {/* Change Password */}
+   483→   483→                <div
+   484→   484→                  className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+   485→   485→                  onClick={() => setPasswordDialogOpen(true)}
+   486→   486→                  role="button"
+   487→   487→                  tabIndex={0}
+   488→   488→                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPasswordDialogOpen(true); } }}
+   489→   489→                  aria-label="Change password"
+   490→   490→                >
+   491→   491→                  <div className="flex items-center gap-3">
+   492→   492→                    <Key size={16} className="text-muted-foreground" />
+   493→   493→                    <div>
+   494→   494→                      <p className="text-sm font-medium">Change Password</p>
+   495→   495→                      <p className="text-[10px] text-muted-foreground">Last changed 30 days ago</p>
+   496→   496→                    </div>
+   497→   497→                  </div>
+   498→   498→                  <ChevronRight size={14} className="text-muted-foreground" />
+   499→   499→                </div>
+   500→   500→
+   501→   501→                {/* Two-Factor Authentication */}
+   502→   502→                <div
+   503→   503→                  className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+   504→   504→                  onClick={handleTwoFactorToggle}
+   505→   505→                  role="button"
+   506→   506→                  tabIndex={0}
+   507→   507→                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTwoFactorToggle(); } }}
+   508→   508→                  aria-label={`Two-Factor Authentication: ${twoFactorEnabled ? 'Enabled' : 'Disabled'}. Click to toggle.`}
+   509→   509→                >
+   510→   510→                  <div className="flex items-center gap-3">
+   511→   511→                    <Shield size={16} className="text-muted-foreground" />
+   512→   512→                    <div>
+   513→   513→                      <p className="text-sm font-medium">Two-Factor Authentication</p>
+   514→   514→                      <p className="text-[10px] text-muted-foreground">Add an extra layer of security</p>
+   515→   515→                    </div>
+   516→   516→                  </div>
+   517→   517→                  <AnimatePresence mode="wait">
+   518→   518→                    <motion.div
+   519→   519→                      key={twoFactorEnabled ? 'enabled' : 'setup'}
+   520→   520→                      initial={{ scale: 0.8, opacity: 0 }}
+   521→   521→                      animate={{ scale: 1, opacity: 1 }}
+   522→   522→                      exit={{ scale: 0.8, opacity: 0 }}
+   523→   523→                      transition={{ duration: 0.2 }}
+   524→   524→                    >
+   525→   525→                      {twoFactorEnabled ? (
+   526→   526→                        <Badge className="bg-[oklch(0.72_0.18_170/15)] text-[oklch(0.72_0.18_170)] text-[10px] flex items-center gap-1">
+   527→   527→                          <Check size={10} /> Enabled
+   528→   528→                        </Badge>
+   529→   529→                      ) : (
+   530→   530→                        <Badge variant="outline" className="text-[10px] border-[oklch(0.78_0.16_85/30)] text-[oklch(0.78_0.16_85)]">
+   531→   531→                          Setup
+   532→   532→                        </Badge>
+   533→   533→                      )}
+   534→   534→                    </motion.div>
+   535→   535→                  </AnimatePresence>
+   536→   536→                </div>
+   537→   537→              </div>
+   538→   538→            </CardContent>
+   539→   539→          </Card>
+   540→   540→        </motion.div>
+   541→   541→      </div>
+   542→   542→
+   543→   543→      {/* ───── Save Button ───── */}
+   544→   544→      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+   545→   545→        <Button
+   546→   546→          className="w-full bg-[oklch(0.65_0.22_240)] hover:bg-[oklch(0.58_0.24_240)] text-white"
+   547→   547→          onClick={handleSave}
+   548→   548→          disabled={saving}
+   549→   549→        >
+   550→   550→          {saving ? (
+   551→   551→            <>
+   552→   552→              <Loader2 size={14} className="mr-2 animate-spin" /> Saving…
+   553→   553→            </>
+   554→   554→          ) : (
+   555→   555→            <>
+   556→   556→              <Save size={14} className="mr-2" /> Save Changes
+   557→   557→            </>
+   558→   558→          )}
+   559→   559→        </Button>
+   560→   560→      </motion.div>
+   561→   561→
+   562→   562→      {/* ───── Change Password Dialog ───── */}
+   563→   563→      <Dialog open={passwordDialogOpen} onOpenChange={(open) => {
+   564→   564→        setPasswordDialogOpen(open);
+   565→   565→        if (!open) {
+   566→   566→          setOldPassword('');
+   567→   567→          setNewPassword('');
+   568→   568→          setConfirmPassword('');
+   569→   569→          setPasswordError('');
+   570→   570→        }
+   571→   571→      }}>
+   572→   572→        <DialogContent className="glass sm:max-w-md">
+   573→   573→          <DialogHeader>
+   574→   574→            <DialogTitle>Change Password</DialogTitle>
+   575→   575→          </DialogHeader>
+   576→   576→          <div className="space-y-4 py-2">
+   577→   577→            <div className="space-y-1.5">
+   578→   578→              <Label className="text-xs">Current Password</Label>
+   579→   579→              <Input
+   580→   580→                type="password"
+   581→   581→                value={oldPassword}
+   582→   582→                onChange={(e) => setOldPassword(e.target.value)}
+   583→   583→                placeholder="Enter current password"
+   584→   584→                className="bg-muted/50 border-border/50 text-sm"
+   585→   585→              />
+   586→   586→            </div>
+   587→   587→            <div className="space-y-1.5">
+   588→   588→              <Label className="text-xs">New Password</Label>
+   589→   589→              <Input
+   590→   590→                type="password"
+   591→   591→                value={newPassword}
+   592→   592→                onChange={(e) => setNewPassword(e.target.value)}
+   593→   593→                placeholder="Enter new password"
+   594→   594→                className="bg-muted/50 border-border/50 text-sm"
+   595→   595→              />
+   596→   596→            </div>
+   597→   597→            <div className="space-y-1.5">
+   598→   598→              <Label className="text-xs">Confirm New Password</Label>
+   599→   599→              <Input
+   600→   600→                type="password"
+   601→   601→                value={confirmPassword}
+   602→   602→                onChange={(e) => setConfirmPassword(e.target.value)}
+   603→   603→                placeholder="Confirm new password"
+   604→   604→                className="bg-muted/50 border-border/50 text-sm"
+   605→   605→              />
+   606→   606→            </div>
+   607→   607→            {passwordError && (
+   608→   608→              <motion.p
+   609→   609→                initial={{ opacity: 0, y: -4 }}
+   610→   610→                animate={{ opacity: 1, y: 0 }}
+   611→   611→                className="text-xs text-red-400"
+   612→   612→              >
+   613→   613→                {passwordError}
+   614→   614→              </motion.p>
+   615→   615→            )}
+   616→   616→          </div>
+   617→   617→          <DialogFooter>
+   618→   618→            <Button variant="outline" onClick={() => {
+   619→   619→              setPasswordDialogOpen(false);
+   620→   620→              setOldPassword('');
+   621→   621→              setNewPassword('');
+   622→   622→              setConfirmPassword('');
+   623→   623→              setPasswordError('');
+   624→   624→            }}>
+   625→   625→              Cancel
+   626→   626→            </Button>
+   627→   627→            <Button
+   628→   628→              className="bg-[oklch(0.65_0.22_240)] hover:bg-[oklch(0.58_0.24_240)] text-white"
+   629→   629→              onClick={handlePasswordChange}
+   630→   630→            >
+   631→   631→              Change
+   632→   632→            </Button>
+   633→   633→          </DialogFooter>
+   634→   634→        </DialogContent>
+   635→   635→      </Dialog>
+   636→   636→    </div>
+   637→   637→  );
+   638→   638→}

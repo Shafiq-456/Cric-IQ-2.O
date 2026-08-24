@@ -1,0 +1,502 @@
+     1→     1→     1→'use client';
+     2→     2→     2→
+     3→     3→     3→import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+     4→     4→     4→import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
+     5→     5→     5→import { Button } from '@/components/ui/button';
+     6→     6→     6→import { useAppStore } from '@/store/useAppStore';
+     7→     7→     7→import {
+     8→     8→     8→  Search, Sparkles, ArrowRight, Play, Menu, X, ChevronDown,
+     9→     9→     9→} from 'lucide-react';
+    10→    10→    10→
+    11→    11→    11→const navItems = [
+    12→    12→    12→  { label: 'Home', active: true },
+    13→    13→    13→  { label: 'AI Chat', active: false },
+    14→    14→    14→  { label: 'Analytics', active: false },
+    15→    15→    15→  { label: 'Players', active: false },
+    16→    16→    16→  { label: 'Matches', active: false },
+    17→    17→    17→  { label: 'About', active: false },
+    18→    18→    18→  { label: 'Journal', active: false },
+    19→    19→    19→  { label: 'Reach Us', active: false },
+    20→    20→    20→];
+    21→    21→    21→
+    22→    22→    22→/* ─── 3D Cricket Ball with Mouse-Follow Tilt ─── */
+    23→    23→    23→function CricketBall3D({ size = 280, className = '' }: { size?: number; className?: string }) {
+    24→    24→    24→  const ref = useRef<HTMLDivElement>(null);
+    25→    25→    25→  const mouseX = useMotionValue(0);
+    26→    26→    26→  const mouseY = useMotionValue(0);
+    27→    27→    27→  const springConfig = { stiffness: 80, damping: 20, mass: 0.5 };
+    28→    28→    28→  const rotateX = useSpring(0, springConfig);
+    29→    29→    29→  const rotateY = useSpring(0, springConfig);
+    30→    30→    30→
+    31→    31→    31→  useEffect(() => {
+    32→    32→    32→    const el = ref.current;
+    33→    33→    33→    if (!el) return;
+    34→    34→    34→    const parent = el.closest('section') || window;
+    35→    35→    35→
+    36→    36→    36→    const handleMove = (e: MouseEvent) => {
+    37→    37→    37→      const rect = el.getBoundingClientRect();
+    38→    38→    38→      const cx = rect.left + rect.width / 2;
+    39→    39→    39→      const cy = rect.top + rect.height / 2;
+    40→    40→    40→      const dx = (e.clientX - cx) / (rect.width / 2);
+    41→    41→    41→      const dy = (e.clientY - cy) / (rect.height / 2);
+    42→    42→    42→      rotateX.set(-dy * 25);
+    43→    43→    43→      rotateY.set(dx * 25);
+    44→    44→    44→    };
+    45→    45→    45→
+    46→    46→    46→    const handleLeave = () => {
+    47→    47→    47→      rotateX.set(0);
+    48→    48→    48→      rotateY.set(0);
+    49→    49→    49→    };
+    50→    50→    50→
+    51→    51→    51→    window.addEventListener('mousemove', handleMove);
+    52→    52→    52→    window.addEventListener('mouseleave', handleLeave);
+    53→    53→    53→    return () => {
+    54→    54→    54→      window.removeEventListener('mousemove', handleMove);
+    55→    55→    55→      window.removeEventListener('mouseleave', handleLeave);
+    56→    56→    56→    };
+    57→    57→    57→  }, [rotateX, rotateY]);
+    58→    58→    58→
+    59→    59→    59→  return (
+    60→    60→    60→    <div ref={ref} className={`perspective-dramatic ${className}`}>
+    61→    61→    61→      <motion.div
+    62→    62→    62→        className="preserve-3d relative"
+    63→    63→    63→        style={{ rotateX, rotateY, width: size, height: size }}
+    64→    64→    64→      >
+    65→    65→    65→        {/* Ball body */}
+    66→    66→    66→        <div
+    67→    67→    67→          className="w-full h-full rounded-full relative overflow-hidden"
+    68→    68→    68→          style={{
+    69→    69→    69→            boxShadow: `
+    70→    70→    70→              0 0 ${size * 0.4}px rgba(192,57,43,0.18),
+    71→    71→    71→              0 ${size * 0.12}px ${size * 0.35}px rgba(0,0,0,0.5),
+    72→    72→    72→              0 0 ${size * 0.8}px rgba(192,57,43,0.08)
+    73→    73→    73→            `,
+    74→    74→    74→          }}
+    75→    75→    75→        >
+    76→    76→    76→          <img src="/cricket-ball.png" alt="" className="w-full h-full object-cover" />
+    77→    77→    77→        </div>
+    78→    78→    78→
+    79→    79→    79→        {/* Shadow beneath ball */}
+    80→    80→    80→        <div
+    81→    81→    81→          className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-3/4 h-4 rounded-full"
+    82→    82→    82→          style={{
+    83→    83→    83→            background: 'radial-gradient(ellipse, rgba(0,0,0,0.4) 0%, transparent 70%)',
+    84→    84→    84→            filter: 'blur(8px)',
+    85→    85→    85→          }}
+    86→    86→    86→        />
+    87→    87→    87→      </motion.div>
+    88→    88→    88→    </div>
+    89→    89→    89→  );
+    90→    90→    90→}
+    91→    91→    91→
+    92→    92→    92→/* ─── 3D Floating Stumps ─── */
+    93→    93→    93→function Stumps3D({ className = '' }: { className?: string }) {
+    94→    94→    94→  return (
+    95→    95→    95→    <div className={`absolute pointer-events-none preserve-3d ${className}`}>
+    96→    96→    96→      <div className="flex gap-2.5 items-end">
+    97→    97→    97→        {[0, 1, 2].map((i) => (
+    98→    98→    98→          <motion.div
+    99→    99→    99→            key={i}
+   100→   100→   100→            className="rounded-full relative"
+   101→   101→   101→            style={{
+   102→   102→   102→              width: '4px',
+   103→   103→   103→              height: `${90 + i * 14}px`,
+   104→   104→   104→              background: 'linear-gradient(180deg, oklch(0.85 0.02 70) 0%, oklch(0.55 0.03 60) 60%, oklch(0.35 0.02 50) 100%)',
+   105→   105→   105→              boxShadow: '1px 2px 8px rgba(0,0,0,0.4), inset 1px 0 2px rgba(255,255,255,0.1)',
+   106→   106→   106→              transformOrigin: 'bottom center',
+   107→   107→   107→            }}
+   108→   108→   108→            initial={{ scaleY: 0, opacity: 0, rotateZ: i === 0 ? -8 : i === 2 ? 8 : 0 }}
+   109→   109→   109→            animate={{ scaleY: 1, opacity: 1, rotateZ: 0 }}
+   110→   110→   110→            transition={{ delay: 1.8 + i * 0.15, duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+   111→   111→   111→          />
+   112→   112→   112→        ))}
+   113→   113→   113→        {/* Bails */}
+   114→   114→   114→        <motion.div
+   115→   115→   115→          className="absolute -top-1.5 left-0 right-0 flex justify-between px-1"
+   116→   116→   116→          initial={{ opacity: 0, y: -10 }}
+   117→   117→   117→          animate={{ opacity: 1, y: 0 }}
+   118→   118→   118→          transition={{ delay: 2.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+   119→   119→   119→        >
+   120→   120→   120→          <div className="w-3/4 h-[3px] rounded-full" style={{ background: 'linear-gradient(90deg, oklch(0.75 0.02 70), oklch(0.60 0.03 60))', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
+   121→   121→   121→          <div className="w-3/4 h-[3px] rounded-full" style={{ background: 'linear-gradient(90deg, oklch(0.60 0.03 60), oklch(0.75 0.02 70))', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
+   122→   122→   122→        </motion.div>
+   123→   123→   123→      </div>
+   124→   124→   124→    </div>
+   125→   125→   125→  );
+   126→   126→   126→}
+   127→   127→   127→
+   128→   128→   128→/* ─── Cricket Ball Trajectory Particles ─── */
+   129→   129→   129→function TrajectoryParticles({ className = '' }: { className?: string }) {
+   130→   130→   130→  const particles = useMemo(() =>
+   131→   131→   131→    Array.from({ length: 8 }).map((_, i) => ({
+   132→   132→   132→      id: i,
+   133→   133→   133→      delay: i * 1.8,
+   134→   134→   134→      duration: 3 + Math.random() * 2,
+   135→   135→   135→      startX: 15 + Math.random() * 20,
+   136→   136→   136→      startY: 60 + Math.random() * 15,
+   137→   137→   137→      endX: 65 + Math.random() * 25,
+   138→   138→   138→      endY: 15 + Math.random() * 25,
+   139→   139→   139→      size: 2 + Math.random() * 2,
+   140→   140→   140→      color: i % 3 === 0 ? 'oklch(0.65 0.20 155)' : i % 3 === 1 ? 'oklch(0.55 0.16 45)' : 'oklch(0.80 0.15 85)',
+   141→   141→   141→    })), []);
+   142→   142→   142→
+   143→   143→   143→  return (
+   144→   144→   144→    <div className={`absolute inset-0 pointer-events-none overflow-hidden ${className}`}>
+   145→   145→   145→      {particles.map((p) => (
+   146→   146→   146→        <motion.div
+   147→   147→   147→          key={p.id}
+   148→   148→   148→          className="absolute rounded-full"
+   149→   149→   149→          style={{
+   150→   150→   150→            width: p.size,
+   151→   151→   151→            height: p.size,
+   152→   152→   152→            background: p.color,
+   153→   153→   153→            boxShadow: `0 0 ${p.size * 3}px ${p.color}`,
+   154→   154→   154→            left: `${p.startX}%`,
+   155→   155→   155→            top: `${p.startY}%`,
+   156→   156→   156→          }}
+   157→   157→   157→          animate={{
+   158→   158→   158→            left: [`${p.startX}%`, `${(p.startX + p.endX) / 2}%`, `${p.endX}%`],
+   159→   159→   159→            top: [`${p.startY}%`, `${p.startY - 30}%`, `${p.endY}%`],
+   160→   160→   160→            opacity: [0, 0.8, 0.8, 0],
+   161→   161→   161→            scale: [0.5, 1, 1, 0.3],
+   162→   162→   162→          }}
+   163→   163→   163→          transition={{
+   164→   164→   164→            duration: p.duration,
+   165→   165→   165→            delay: p.delay,
+   166→   166→   166→            repeat: Infinity,
+   167→   167→   167→            ease: 'easeInOut',
+   168→   168→   168→          }}
+   169→   169→   169→        />
+   170→   170→   170→      ))}
+   171→   171→   171→    </div>
+   172→   172→   172→  );
+   173→   173→   173→}
+   174→   174→   174→
+   175→   175→   175→/* ─── Stadium Floodlight Beams ─── */
+   176→   176→   176→function FloodlightBeams() {
+   177→   177→   177→  return (
+   178→   178→   178→    <>
+   179→   179→   179→      {/* Left beam */}
+   180→   180→   180→      <div className="absolute -top-20 left-[10%] w-[300px] md:w-[500px] h-[120vh] z-[1] pointer-events-none beam-left"
+   181→   181→   181→        style={{
+   182→   182→   182→          background: 'conic-gradient(from 200deg at 50% 0%, transparent 30%, oklch(0.80 0.12 85 / 4%) 45%, oklch(0.80 0.12 85 / 8%) 50%, oklch(0.80 0.12 85 / 4%) 55%, transparent 70%)',
+   183→   183→   183→        }}
+   184→   184→   184→      />
+   185→   185→   185→      {/* Right beam */}
+   186→   186→   186→      <div className="absolute -top-20 right-[8%] w-[300px] md:w-[450px] h-[110vh] z-[1] pointer-events-none beam-right"
+   187→   187→   187→        style={{
+   188→   188→   188→          background: 'conic-gradient(from 340deg at 50% 0%, transparent 30%, oklch(0.80 0.12 85 / 3%) 45%, oklch(0.80 0.12 85 / 7%) 50%, oklch(0.80 0.12 85 / 3%) 55%, transparent 70%)',
+   189→   189→   189→        }}
+   190→   190→   190→      />
+   191→   191→   191→      {/* Center-top ambient */}
+   192→   192→   192→      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[400px] z-[1] pointer-events-none"
+   193→   193→   193→        style={{
+   194→   194→   194→          background: 'radial-gradient(ellipse at 50% 0%, oklch(0.65 0.20 155 / 8%) 0%, transparent 60%)',
+   195→   195→   195→        }}
+   196→   196→   196→      />
+   197→   197→   197→    </>
+   198→   198→   198→  );
+   199→   199→   199→}
+   200→   200→   200→
+   201→   201→   201→/* ─── Navbar ─── */
+   202→   202→   202→function Navbar() {
+   203→   203→   203→  const [mobileOpen, setMobileOpen] = useState(false);
+   204→   204→   204→
+   205→   205→   205→  return (
+   206→   206→   206→    <>
+   207→   207→   207→      <motion.nav
+   208→   208→   208→        className="fixed top-0 left-0 right-0 z-50 py-5"
+   209→   209→   209→        initial={{ y: -80, opacity: 0, filter: 'blur(10px)' }}
+   210→   210→   210→        animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+   211→   211→   211→        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+   212→   212→   212→      >
+   213→   213→   213→        <div className="flex justify-between items-center px-6 sm:px-8 max-w-7xl mx-auto">
+   214→   214→   214→          <a href="#" className="flex items-center gap-3 select-none group">
+   215→   215→   215→            <motion.div
+   216→   216→   216→              className="w-9 h-9 rounded-full shrink-0 overflow-hidden"
+   217→   217→   217→              style={{
+   218→   218→   218→                boxShadow: '0 0 16px rgba(212,69,53,0.35), 0 2px 8px rgba(0,0,0,0.3)',
+   219→   219→   219→              }}
+   220→   220→   220→              whileHover={{ rotateZ: 360, scale: 1.15 }}
+   221→   221→   221→              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+   222→   222→   222→            >
+   223→   223→   223→              <img src="/cricket-ball.png" alt="" className="w-full h-full object-cover" />
+   224→   224→   224→            </motion.div>
+   225→   225→   225→            <span
+   226→   226→   226→              className="text-3xl tracking-tight font-normal text-white group-hover:text-[oklch(0.65_0.20_155)] transition-colors duration-500"
+   227→   227→   227→              style={{ fontFamily: 'var(--font-instrument-serif), "Instrument Serif", serif' }}
+   228→   228→   228→            >
+   229→   229→   229→              CricIQ
+   230→   230→   230→              <sup className="text-[10px] ml-0.5 text-white/40 font-body-hero">®</sup>
+   231→   231→   231→            </span>
+   232→   232→   232→          </a>
+   233→   233→   233→
+   234→   234→   234→          <div className="hidden lg:flex items-center gap-8">
+   235→   235→   235→            {navItems.map((item, i) => (
+   236→   236→   236→              <motion.a
+   237→   237→   237→                key={item.label}
+   238→   238→   238→                href="#"
+   239→   239→   239→                className="text-sm text-white/40 hover:text-white/90 transition-colors duration-300 font-body-hero relative group"
+   240→   240→   240→                initial={{ opacity: 0, y: -10 }}
+   241→   241→   241→                animate={{ opacity: 1, y: 0 }}
+   242→   242→   242→                transition={{ delay: 0.8 + i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+   243→   243→   243→              >
+   244→   244→   244→                {item.label}
+   245→   245→   245→                <span className="absolute -bottom-1 left-0 right-0 h-[1px] bg-white/0 group-hover:bg-[oklch(0.65_0.20_155)] transition-colors duration-300" />
+   246→   246→   246→                {item.active && (
+   247→   247→   247→                  <motion.span
+   248→   248→   248→                    className="absolute -bottom-1 left-0 right-0 h-[1.5px] bg-[oklch(0.65_0.20_155)] rounded-full"
+   249→   249→   249→                    layoutId="nav-underline"
+   250→   250→   250→                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+   251→   251→   251→                  />
+   252→   252→   252→                )}
+   253→   253→   253→              </motion.a>
+   254→   254→   254→            ))}
+   255→   255→   255→          </div>
+   256→   256→   256→
+   257→   257→   257→          <div className="flex items-center gap-3">
+   258→   258→   258→            <motion.div
+   259→   259→   259→              initial={{ opacity: 0, scale: 0.9 }}
+   260→   260→   260→              animate={{ opacity: 1, scale: 1 }}
+   261→   261→   261→              transition={{ delay: 1.1, duration: 0.6 }}
+   262→   262→   262→            >
+   263→   263→   263→              <Button
+   264→   264→   264→                className="hidden sm:inline-flex rounded-full px-6 py-2.5 text-sm font-medium cursor-pointer bg-[oklch(0.65_0.20_155)] text-white hover:bg-[oklch(0.58_0.22_155)] transition-all duration-300 font-body-hero"
+   265→   265→   265→                style={{ boxShadow: '0 0 20px oklch(0.65 0.20 155 / 20%)' }}
+   266→   266→   266→                whileHover={{ scale: 1.04, boxShadow: '0 0 35px oklch(0.65 0.20 155 / 35%)' }}
+   267→   267→   267→                whileTap={{ scale: 0.97 }}
+   268→   268→   268→                asChild
+   269→   269→   269→              >
+   270→   270→   270→                <a href="#explore">
+   271→   271→   271→                  <Sparkles size={14} className="mr-2" />
+   272→   272→   272→                  Begin Journey
+   273→   273→   273→                </a>
+   274→   274→   274→              </Button>
+   275→   275→   275→            </motion.div>
+   276→   276→   276→
+   277→   277→   277→            <button
+   278→   278→   278→              className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+   279→   279→   279→              onClick={() => setMobileOpen(!mobileOpen)}
+   280→   280→   280→            >
+   281→   281→   281→              {mobileOpen ? <X size={22} className="text-white" /> : <Menu size={22} className="text-white" />}
+   282→   282→   282→            </button>
+   283→   283→   283→          </div>
+   284→   284→   284→        </div>
+   285→   285→   285→      </motion.nav>
+   286→   286→   286→
+   287→   287→   287→      {/* Mobile Drawer */}
+   288→   288→   288→      <AnimatePresence>
+   289→   289→   289→        {mobileOpen && (
+   290→   290→   290→          <motion.div className="fixed inset-0 z-40 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   291→   291→   291→            <motion.div
+   292→   292→   292→              className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+   293→   293→   293→              onClick={() => setMobileOpen(false)}
+   294→   294→   294→              initial={{ opacity: 0 }}
+   295→   295→   295→              animate={{ opacity: 1 }}
+   296→   296→   296→              exit={{ opacity: 0 }}
+   297→   297→   297→            />
+   298→   298→   298→            <motion.div
+   299→   299→   299→              className="absolute right-0 top-0 bottom-0 w-72 p-6 pt-20 border-l border-white/5"
+   300→   300→   300→              style={{ background: 'oklch(0.07 0.015 265 / 98%)', backdropFilter: 'blur(32px)' }}
+   301→   301→   301→              initial={{ x: 288, opacity: 0 }}
+   302→   302→   302→              animate={{ x: 0, opacity: 1 }}
+   303→   303→   303→              exit={{ x: 288, opacity: 0 }}
+   304→   304→   304→              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+   305→   305→   305→            >
+   306→   306→   306→              {navItems.map((item, i) => (
+   307→   307→   307→                <motion.a
+   308→   308→   308→                  key={item.label}
+   309→   309→   309→                  href="#"
+   310→   310→   310→                  className="block py-3 text-base border-b border-white/5 font-body-hero"
+   311→   311→   311→                  style={{ color: item.active ? '#FFFFFF' : 'rgba(255,255,255,0.35)' }}
+   312→   312→   312→                  initial={{ opacity: 0, x: 30 }}
+   313→   313→   313→                  animate={{ opacity: 1, x: 0 }}
+   314→   314→   314→                  transition={{ delay: 0.04 * i, ease: [0.16, 1, 0.3, 1] }}
+   315→   315→   315→                  onClick={() => setMobileOpen(false)}
+   316→   316→   316→                >
+   317→   317→   317→                  {item.label}
+   318→   318→   318→                </motion.a>
+   319→   319→   319→              ))}
+   320→   320→   320→              <div className="mt-6">
+   321→   321→   321→                <Button className="w-full rounded-full bg-[oklch(0.65_0.20_155)] text-white hover:bg-[oklch(0.58_0.22_155)] font-body-hero cursor-pointer">
+   322→   322→   322→                  Begin Journey
+   323→   323→   323→                </Button>
+   324→   324→   324→              </div>
+   325→   325→   325→            </motion.div>
+   326→   326→   326→          </motion.div>
+   327→   327→   327→        )}
+   328→   328→   328→      </AnimatePresence>
+   329→   329→   329→    </>
+   330→   330→   330→  );
+   331→   331→   331→}
+   332→   332→   332→
+   333→   333→   333→/* ─── Animated Search Bar with 3D tilt ─── */
+   334→   334→   334→function AnimatedSearchBar() {
+   335→   335→   335→  const prompts = [
+   336→   336→   336→    'Who has the best Test average in 2026?',
+   337→   337→   337→    'Compare Bumrah vs Cummins in WTC',
+   338→   338→   338→    'India vs Australia head-to-head since 2020',
+   339→   339→   339→    'Best bowling figures in Champions Trophy history',
+   340→   340→   340→    'Explain DRS referral success rates by team',
+   341→   341→   341→  ];
+   342→   342→   342→  const [idx, setIdx] = useState(0);
+   343→   343→   343→
+   344→   344→   344→  useEffect(() => {
+   345→   345→   345→    const iv = setInterval(() => setIdx((i) => (i + 1) % prompts.length), 3000);
+   346→   346→   346→    return () => clearInterval(iv);
+   347→   347→   347→  }, [prompts.length]);
+   348→   348→   348→
+   349→   349→   349→  return (
+   350→   350→   350→    <div className="max-w-2xl w-full perspective-subtle">
+   351→   351→   351→      <motion.div
+   352→   352→   352→        className="relative rounded-2xl p-[1px] overflow-hidden group"
+   353→   353→   353→        style={{
+   354→   354→   354→          background: 'linear-gradient(135deg, oklch(0.65 0.20 155 / 35%), oklch(0.55 0.16 45 / 25%), oklch(0.80 0.15 85 / 20%))',
+   355→   355→   355→        }}
+   356→   356→   356→        initial={{ opacity: 0, y: 40, rotateX: 15, scale: 0.95 }}
+   357→   357→   357→        animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+   358→   358→   358→        transition={{ duration: 1.2, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
+   359→   359→   359→        whileHover={{ scale: 1.01, rotateX: -1 }}
+   360→   360→   360→      >
+   361→   361→   361→        <div
+   362→   362→   362→          className="rounded-2xl flex items-center gap-3 px-4 py-3.5 sm:py-4 transition-all duration-500 group-hover:bg-[oklch(0.08_0.015_265/85%)]"
+   363→   363→   363→          style={{
+   364→   364→   364→            background: 'oklch(0.08 0.015 265 / 75%)',
+   365→   365→   365→            backdropFilter: 'blur(24px)',
+   366→   366→   366→          }}
+   367→   367→   367→        >
+   368→   368→   368→          <Search size={18} className="text-white/30 shrink-0" />
+   369→   369→   369→          <span className="text-white/30 text-sm sm:text-base flex-1 text-left truncate font-body-hero">
+   370→   370→   370→            <motion.span
+   371→   371→   371→              key={idx}
+   372→   372→   372→              initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+   373→   373→   373→              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+   374→   374→   374→              exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+   375→   375→   375→              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+   376→   376→   376→              className="inline-block"
+   377→   377→   377→            >
+   378→   378→   378→              {prompts[idx]}
+   379→   379→   379→            </motion.span>
+   380→   380→   380→          </span>
+   381→   381→   381→          <Button
+   382→   382→   382→            size="sm"
+   383→   383→   383→            className="bg-[oklch(0.65_0.20_155/70%)] hover:bg-[oklch(0.65_0.20_155)] text-white shrink-0 font-body-hero cursor-pointer transition-all duration-300"
+   384→   384→   384→            style={{ boxShadow: '0 0 16px oklch(0.65 0.20 155 / 15%)' }}
+   385→   385→   385→          >
+   386→   386→   386→            <Sparkles size={14} className="mr-1.5" />
+   387→   387→   387→            Ask AI
+   388→   388→   388→          </Button>
+   389→   389→   389→        </div>
+   390→   390→   390→      </motion.div>
+   391→   391→   391→    </div>
+   392→   392→   392→  );
+   393→   393→   393→}
+   394→   394→   394→
+   395→   395→   395→/* ═══════════════════════════════════════════════════════════════════
+   396→   396→   396→   MAIN EXPORT — Premium 3D Cinematic Stadium Hero
+   397→   397→   397→   ═══════════════════════════════════════════════════════════════════ */
+   398→   398→   398→export default function VideoHeroSection({ onEnterApp }: { onEnterApp?: () => void }) {
+   399→   399→   399→  const { setView } = useAppStore();
+   400→   400→   400→  const handleEnter = onEnterApp || (() => setView('dashboard'));
+   401→   401→   401→  const containerRef = useRef<HTMLElement>(null);
+   402→   402→   402→  const { scrollYProgress } = useScroll({
+   403→   403→   403→    target: containerRef,
+   404→   404→   404→    offset: ['start start', 'end start'],
+   405→   405→   405→  });
+   406→   406→   406→
+   407→   407→   407→  /* 3D parallax layers */
+   408→   408→   408→  const bgY = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
+   409→   409→   409→  const midY = useTransform(scrollYProgress, [0, 1], ['0%', '12%']);
+   410→   410→   410→  const contentRotateX = useTransform(scrollYProgress, [0, 1], [0, 5]);
+   411→   411→   411→  const contentScale = useTransform(scrollYProgress, [0, 1], [1, 0.96]);
+   412→   412→   412→  const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
+   413→   413→   413→
+   414→   414→   414→  return (
+   415→   415→   415→    <section
+   416→   416→   416→      ref={containerRef}
+   417→   417→   417→      className="relative min-h-screen w-full overflow-hidden stadium-night"
+   418→   418→   418→      id="explore"
+   419→   419→   419→    >
+   420→   420→   420→      {/* ── Layer 0: Stadium grid pattern ── */}
+   421→   421→   421→      <motion.div className="absolute inset-0 z-[1] stadium-grid" style={{ y: bgY }} />
+   422→   422→   422→
+   423→   423→   423→      {/* ── Layer 0: Seam pattern ── */}
+   424→   424→   424→      <motion.div className="absolute inset-0 seam-pattern opacity-20 z-[1]" style={{ y: bgY }} />
+   425→   425→   425→
+   426→   426→   426→      {/* ── Layer 1: Floodlight beams ── */}
+   427→   427→   427→      <FloodlightBeams />
+   428→   428→   428→
+   429→   429→   429→      {/* ── Layer 1: Pitch strip ── */}
+   430→   430→   430→      <motion.div className="absolute inset-0 pitch-strip z-[1]" style={{ y: midY }} />
+   431→   431→   431→
+   432→   432→   432→      {/* ── Layer 2: Trajectory particles ── */}
+   433→   433→   433→      <TrajectoryParticles className="z-[2]" />
+   434→   434→   434→
+   435→   435→   435→      {/* ── Layer 2: Floating ambient particles ── */}
+   436→   436→   436→      {Array.from({ length: 16 }).map((_, i) => (
+   437→   437→   437→        <motion.div
+   438→   438→   438→          key={i}
+   439→   439→   439→          className="absolute z-[2] rounded-full pointer-events-none"
+   440→   440→   440→          style={{
+   441→   441→   441→            width: 1.5 + Math.random() * 2.5,
+   442→   442→   442→            height: 1.5 + Math.random() * 2.5,
+   443→   443→   443→            left: `${5 + Math.random() * 90}%`,
+   444→   444→   444→            top: `${5 + Math.random() * 90}%`,
+   445→   445→   445→            background: i % 4 === 0 ? 'oklch(0.65 0.20 155 / 50%)' : i % 4 === 1 ? 'oklch(0.55 0.16 45 / 35%)' : i % 4 === 2 ? 'oklch(0.80 0.15 85 / 30%)' : 'rgba(255,255,255,0.15)',
+   446→   446→   446→            boxShadow: `0 0 ${4 + Math.random() * 6}px ${i % 4 === 0 ? 'oklch(0.65 0.20 155 / 30%)' : 'transparent'}`,
+   447→   447→   447→          }}
+   448→   448→   448→          animate={{
+   449→   449→   449→            y: [0, -25 - Math.random() * 35, 0],
+   450→   450→   450→            x: [0, (Math.random() - 0.5) * 25, 0],
+   451→   451→   451→            opacity: [0.15, 0.7, 0.15],
+   452→   452→   452→            scale: [1, 1.4, 1],
+   453→   453→   453→          }}
+   454→   454→   454→          transition={{
+   455→   455→   455→            duration: 5 + Math.random() * 5,
+   456→   456→   456→            repeat: Infinity,
+   457→   457→   457→            delay: Math.random() * 4,
+   458→   458→   458→            ease: 'easeInOut',
+   459→   459→   459→          }}
+   460→   460→   460→        />
+   461→   461→   461→      ))}
+   462→   462→   462→
+   463→   463→   463→      {/* ── Layer 3: 3D Cricket Ball (mouse-tracking) ── */}
+   464→   464→   464→      <motion.div
+   465→   465→   465→        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[3] pointer-events-none"
+   466→   466→   466→        style={{ y: midY, scale: contentScale }}
+   467→   467→   467→        initial={{ opacity: 0, scale: 0.5, rotateZ: -180 }}
+   468→   468→   468→        animate={{ opacity: 0.12, scale: 1, rotateZ: 0 }}
+   469→   469→   469→        transition={{ delay: 2, duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+   470→   470→   470→      >
+   471→   471→   471→        <div className="animate-spin-3d" style={{ transformOrigin: 'center center' }}>
+   472→   472→   472→          <div className="cricket-ball-3d" style={{ width: 400, height: 400, opacity: 0.35 }}>
+   473→   473→   473→            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+   474→   474→   474→              <path d="M50 8 Q58 50 50 92" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5" fill="none" strokeDasharray="5 3" />
+   475→   475→   475→              <path d="M43 8 Q35 50 43 92" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeDasharray="5 3" />
+   476→   476→   476→              <ellipse cx="34" cy="30" rx="14" ry="9" fill="rgba(255,255,255,0.06)" />
+   477→   477→   477→            </svg>
+   478→   478→   478→          </div>
+   479→   479→   479→        </div>
+   480→   480→   480→      </motion.div>
+   481→   481→   481→
+   482→   482→   482→      {/* ── Layer 4: 3D Stumps decoration ── */}
+   483→   483→   483→      <Stumps3D className="bottom-[12%] right-[5%] z-[2] scale-75 opacity-30" />
+   484→   484→   484→      <Stumps3D className="top-[28%] left-[3%] z-[2] scale-50 opacity-20" />
+   485→   485→   485→
+   486→   486→   486→      {/* ── Layer 4: Crowd silhouette ── */}
+   487→   487→   487→      <div className="absolute bottom-0 left-0 right-0 h-24 z-[2] crowd-silhouette" />
+   488→   488→   488→
+   489→   489→   489→      {/* ── Navigation (z-50) ── */}
+   490→   490→   490→      <Navbar />
+   491→   491→   491→
+   492→   492→   492→      {/* ── Hero content (z-10) with 3D scroll parallax ── */}
+   493→   493→   493→      <motion.div
+   494→   494→   494→        className="relative z-10 flex flex-col items-center justify-center text-center px-6 perspective-dramatic"
+   495→   495→   495→        style={{ paddingTop: 'calc(7rem - 40px)', paddingBottom: '10rem' }}
+   496→   496→   496→      >
+   497→   497→   497→        <motion.div
+   498→   498→   498→          className="preserve-3d"
+   499→   499→   499→          style={{ rotateX: contentRotateX, scale: contentScale, opacity: contentOpacity }}
+   500→   500→   500→        >
+
+[showing lines 1-500 of 633; use offset=501 with limit to continue reading]
