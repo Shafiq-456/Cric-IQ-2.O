@@ -120,6 +120,78 @@ export const players: Player[] = [
     matches: 197, runs: 3190, wickets: 275, average: 36.78, strikeRate: 62.34, economy: 2.42,
     image: '', form: 'good', rating: 8.4, recentScores: ['45', '3/28', '67', '5/45', '34'], iccRanking: 5,
   },
+  {
+    id: 'p13', name: 'Travis Head', country: 'Australia', flag: '🇦🇺', role: 'Batsman',
+    battingStyle: 'Left-handed', bowlingStyle: 'Right-arm off break', age: 30,
+    matches: 49, runs: 3173, wickets: 12, average: 41.75, strikeRate: 81.20, economy: 0,
+    image: '', form: 'excellent', rating: 8.7, recentScores: ['137', '115', '48', '89', '62'], iccRanking: 5,
+  },
+  {
+    id: 'p14', name: 'Shubman Gill', country: 'India', flag: '🇮🇳', role: 'Batsman',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm off break', age: 24,
+    matches: 47, runs: 2328, wickets: 0, average: 58.20, strikeRate: 101.40, economy: 0,
+    image: '', form: 'excellent', rating: 8.5, recentScores: ['104', '91', '52', '110', '43'], iccRanking: 6,
+  },
+  {
+    id: 'p15', name: 'Rishabh Pant', country: 'India', flag: '🇮🇳', role: 'Wicket-keeper',
+    battingStyle: 'Left-handed', bowlingStyle: 'None', age: 26,
+    matches: 35, runs: 2419, wickets: 0, average: 43.19, strikeRate: 73.63, economy: 0,
+    image: '', form: 'excellent', rating: 8.8, recentScores: ['89', '146', '57', '99', '64'], iccRanking: 4,
+  },
+  {
+    id: 'p16', name: 'Heinrich Klaasen', country: 'South Africa', flag: '🇿🇦', role: 'Wicket-keeper',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm off break', age: 33,
+    matches: 54, runs: 1623, wickets: 0, average: 42.71, strikeRate: 144.16, economy: 0,
+    image: '', form: 'excellent', rating: 8.6, recentScores: ['174', '60', '83', '47', '109'], iccRanking: 3,
+  },
+  {
+    id: 'p17', name: 'Mitchell Starc', country: 'Australia', flag: '🇦🇺', role: 'Bowler',
+    battingStyle: 'Left-handed', bowlingStyle: 'Left-arm fast', age: 34,
+    matches: 89, runs: 2045, wickets: 358, average: 27.61, strikeRate: 0, economy: 3.39,
+    image: '', form: 'good', rating: 8.7, recentScores: ['5/78', '4/48', '3/32', '6/66', '2/40'], iccRanking: 7,
+  },
+  {
+    id: 'p18', name: 'Suryakumar Yadav', country: 'India', flag: '🇮🇳', role: 'Batsman',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm medium', age: 33,
+    matches: 68, runs: 2340, wickets: 0, average: 44.15, strikeRate: 169.20, economy: 0,
+    image: '', form: 'excellent', rating: 9.1, recentScores: ['112', '83', '68', '100', '51'], iccRanking: 1,
+  },
+  {
+    id: 'p19', name: 'Sachin Tendulkar', country: 'India', flag: '🇮🇳', role: 'Batsman',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm leg spin', age: 50,
+    matches: 463, runs: 18426, wickets: 154, average: 44.83, strikeRate: 86.23, economy: 4.97,
+    image: '', form: 'excellent', rating: 9.9, recentScores: ['200*', '114', '96', '120', '85'], iccRanking: 1,
+  },
+  {
+    id: 'p20', name: 'AB de Villiers', country: 'South Africa', flag: '🇿🇦', role: 'Batsman',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm medium', age: 40,
+    matches: 228, runs: 9577, wickets: 7, average: 53.50, strikeRate: 101.09, economy: 0,
+    image: '', form: 'excellent', rating: 9.8, recentScores: ['149', '119', '162*', '79', '64'], iccRanking: 1,
+  },
+  {
+    id: 'p21', name: 'MS Dhoni', country: 'India', flag: '🇮🇳', role: 'Wicket-keeper',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm medium', age: 43,
+    matches: 350, runs: 10773, wickets: 1, average: 50.57, strikeRate: 87.56, economy: 0,
+    image: '', form: 'good', rating: 9.5, recentScores: ['91*', '54', '87*', '68', '113*'], iccRanking: 2,
+  },
+  {
+    id: 'p22', name: 'Hardik Pandya', country: 'India', flag: '🇮🇳', role: 'All-rounder',
+    battingStyle: 'Right-handed', bowlingStyle: 'Right-arm fast-medium', age: 30,
+    matches: 86, runs: 1769, wickets: 84, average: 34.01, strikeRate: 110.36, economy: 5.56,
+    image: '', form: 'excellent', rating: 8.6, recentScores: ['87', '3/24', '71*', '2/38', '50'], iccRanking: 3,
+  },
+  {
+    id: 'p23', name: 'Yashasvi Jaiswal', country: 'India', flag: '🇮🇳', role: 'Batsman',
+    battingStyle: 'Left-handed', bowlingStyle: 'Right-arm leg break', age: 22,
+    matches: 14, runs: 1407, wickets: 0, average: 64.00, strikeRate: 70.07, economy: 0,
+    image: '', form: 'excellent', rating: 8.8, recentScores: ['214*', '209', '80', '57', '171'], iccRanking: 4,
+  },
+  {
+    id: 'p24', name: 'Kagiso Rabada', country: 'South Africa', flag: '🇿🇦', role: 'Bowler',
+    battingStyle: 'Left-handed', bowlingStyle: 'Right-arm fast', age: 29,
+    matches: 64, runs: 980, wickets: 291, average: 22.05, strikeRate: 0, economy: 3.38,
+    image: '', form: 'excellent', rating: 8.9, recentScores: ['5/34', '4/42', '6/50', '3/29', '4/61'], iccRanking: 2,
+  },
 ];
 
 export const matches: Match[] = [
