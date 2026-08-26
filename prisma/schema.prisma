@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Pooled connection — used by app at runtime (Netlify serverless)
+  directUrl = env("DIRECT_URL")     // Direct connection — used only by Prisma CLI (db push / migrate)
 }
 
 // ─── Application User ────────────────────────────────────────────────────────
