@@ -44,7 +44,7 @@
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) with Glassmorphism & Custom Design Tokens
 - **Animations**: [Framer Motion](https://www.framer.com/motion/)
-- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with [SQLite](https://www.sqlite.org/)
+- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with [PostgreSQL](https://www.postgresql.org/) (Neon / Supabase / Railway)
 - **Authentication**: [Firebase Auth](https://firebase.google.com/products/auth) (Google OAuth)
 - **AI / LLM Provider**: [Groq API](https://groq.com/) (`openai/gpt-oss-120b`)
 - **Icons**: [Lucide React](https://lucide.dev/)
@@ -56,6 +56,7 @@
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
 - **npm** / **yarn** / **pnpm**
+- A **PostgreSQL** database URL (see [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Railway](https://railway.app) — all have generous free tiers)
 
 ### Installation
 
@@ -71,11 +72,19 @@
    ```
 
 3. **Set up Environment Variables**:
-   Create a `.env` file in the project root (see template below).
-
-4. **Initialize Database**:
+   Copy `.env.example` to `.env` and fill in all values.
    ```bash
-   npx prisma migrate dev
+   cp .env.example .env
+   ```
+   Set `DATABASE_URL` to your PostgreSQL connection string, e.g.:
+   ```
+   DATABASE_URL="postgresql://user:password@host:5432/dbname?sslmode=require"
+   ```
+
+4. **Generate Prisma Client & Initialize Database**:
+   ```bash
+   npx prisma generate
+   npx prisma db push
    ```
 
 5. **Run the Development Server**:
@@ -85,6 +94,33 @@
 
 6. **Open in Browser**:
    Navigate to [http://localhost:3000](http://localhost:3000).
+
+---
+
+## 🚀 Netlify Deployment
+
+1. Push this repository to GitHub.
+2. Connect the repository to [Netlify](https://netlify.com).
+3. Set the following **Environment Variables** in Netlify → Site settings → Environment variables:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `GROQ_API_KEY` | Groq AI API key |
+| `CRICAPI_KEY` | Free cricket data API key (cricapi.com) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web config |
+
+4. After deploying, run the database migration once:
+   ```bash
+   # From local machine with DATABASE_URL set to your production DB
+   npx prisma db push
+   ```
+5. Add your Netlify domain to **Firebase Console → Authentication → Settings → Authorized domains**.
 
 ---
 
