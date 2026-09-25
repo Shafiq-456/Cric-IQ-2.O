@@ -108,7 +108,7 @@
 | `DATABASE_URL` | PostgreSQL connection string |
 | `GROQ_API_KEY` | Groq AI API key |
 | `CRICAPI_KEY` | Free cricket data API key (cricapi.com) |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web config |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web configuration |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase web config |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase web config |
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase web config |
